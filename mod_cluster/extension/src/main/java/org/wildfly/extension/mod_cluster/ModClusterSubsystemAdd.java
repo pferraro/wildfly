@@ -103,8 +103,6 @@ class ModClusterSubsystemAdd extends AbstractAddStepHandler {
 
     @Override
     public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
-        System.out.println("ModClusterSubsystemAdd.execute(...)");
-        System.out.println(operation.toJSONString(false));
         super.execute(context, operation);
     }
 
