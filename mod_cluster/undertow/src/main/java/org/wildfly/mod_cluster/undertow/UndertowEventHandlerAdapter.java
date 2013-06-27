@@ -89,8 +89,9 @@ public class UndertowEventHandlerAdapter implements UndertowEventListener, Servi
         ThreadGroup group = new ThreadGroup(UndertowEventHandlerAdapter.class.getSimpleName());
         ThreadFactory factory = new JBossThreadFactory(group, Boolean.FALSE, null, "%G - %t", null, null, AccessController.doPrivileged(GetAccessControlContextAction.getInstance()));
         this.executor = Executors.newScheduledThreadPool(1, factory);
-        // TODO make interval configurable
-        this.executor.scheduleWithFixedDelay(this, 0, 10, TimeUnit.SECONDS);
+        // TODO make status() interval configurable
+        // TODO workaround waiting for jvmRoute by initial wait
+        this.executor.scheduleWithFixedDelay(this, 1, 10, TimeUnit.SECONDS);
     }
 
     @Override

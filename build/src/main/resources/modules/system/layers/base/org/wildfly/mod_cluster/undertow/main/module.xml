@@ -32,12 +32,16 @@
     </resources>
 
     <dependencies>
-        <module name="org.wildfly.extension.mod_cluster"/>
-        <module name="org.wildfly.extension.undertow"/>
-        <module name="org.wildfly.clustering.web.undertow"/>
-        <module name="org.wildfly.security.manager"/>
+        <module name="io.undertow.servlet"/>
+        <module name="javax.servlet.api"/>
+        <module name="org.jboss.as.network"/>
         <module name="org.jboss.mod_cluster.container.spi"/>
         <module name="org.jboss.msc"/>
         <module name="org.jboss.threads"/>
+        <module name="org.jboss.xnio"/>
+        <module name="org.wildfly.clustering.web.undertow"/>
+        <module name="org.wildfly.extension.mod_cluster"/>
+        <module name="org.wildfly.extension.undertow"/>
+        <module name="org.wildfly.security.manager"/>
     </dependencies>
 </module>

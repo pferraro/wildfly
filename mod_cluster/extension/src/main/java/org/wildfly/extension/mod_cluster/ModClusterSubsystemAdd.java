@@ -117,7 +117,7 @@ class ModClusterSubsystemAdd extends AbstractAddStepHandler {
         final ServiceBuilder<?> builder = AsynchronousService.addService(target, ContainerEventHandlerService.SERVICE_NAME, service, true, true)
                 .addDependency(SocketBindingManager.SOCKET_BINDING_MANAGER, SocketBindingManager.class, socketBindingManager)
                 .addListener(verificationHandler)
-                .setInitialMode(Mode.ON_DEMAND)
+                .setInitialMode(Mode.ACTIVE)
         ;
         final ModelNode bindingRefNode = ADVERTISE_SOCKET.resolveModelAttribute(context, modelConfig);
         final String bindingRef = bindingRefNode.isDefined() ? bindingRefNode.asString() : null;
