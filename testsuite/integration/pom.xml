@@ -103,7 +103,7 @@
         <!-- -Dts.clustering -->
         <profile>
             <id>ts.integ.group.clustering</id>
-            <activation><property><name>ts.clustering</name></property></activation>
+            <activation><property><name>ts.clustering</name></property><property><name>ts.clust</name></property></activation>
             <modules>
                 <module>clustering</module>
             </modules>
