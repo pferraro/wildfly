@@ -13,7 +13,7 @@
     <!-- ********************************************************************************** -->
     <!-- *********************************** Clustering *********************************** -->
     <!-- ********************************************************************************** -->
-    <artifactId>wildfly-ts-integ-clust</artifactId>
+    <artifactId>wildfly-ts-integ-clustering</artifactId>
 
     <name>WildFly Test Suite: Integration - Clustering</name>
 
