@@ -33,7 +33,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.utils.HttpClientUtils;
-import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.OperateOnDeployment;
 import org.jboss.arquillian.container.test.api.RunAsClient;
@@ -43,6 +43,7 @@ import org.jboss.arquillian.test.api.ArquillianResource;
 import org.jboss.as.test.clustering.cluster.ClusterAbstractTestCase;
 import org.jboss.as.test.clustering.cluster.web.externalizer.CounterExternalizer;
 import org.jboss.as.test.clustering.cluster.web.externalizer.CounterServlet;
+import org.jboss.as.test.http.util.TestHttpClientUtils;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
@@ -89,9 +90,7 @@ public class ExternalizerTestCase extends ClusterAbstractTestCase {
         URI uri1 = CounterServlet.createURI(baseURL1);
         URI uri2 = CounterServlet.createURI(baseURL2);
 
-        HttpClient client = HttpClients.createDefault();
-
-        try {
+        try (CloseableHttpClient client = TestHttpClientUtils.relaxedCookieHttpClient()) {
             assertValue(client, uri1, 1);
             assertValue(client, uri1, 2);
 
@@ -100,8 +99,6 @@ public class ExternalizerTestCase extends ClusterAbstractTestCase {
 
             assertValue(client, uri1, 5);
             assertValue(client, uri1, 6);
-        } finally {
-            HttpClientUtils.closeQuietly(client);
         }
     }
 
