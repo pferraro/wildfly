@@ -51,7 +51,6 @@ import org.wildfly.clustering.service.ValueDependency;
 import org.wildfly.extension.undertow.logging.UndertowLogger;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.credential.source.CredentialSource;
-import org.wildfly.security.credential.store.CredentialStore;
 import org.wildfly.security.http.util.sso.DefaultSingleSignOnSessionFactory;
 import org.wildfly.security.http.util.sso.SingleSignOnManager;
 import org.wildfly.security.http.util.sso.SingleSignOnSessionFactory;
