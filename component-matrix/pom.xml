@@ -234,6 +234,7 @@
         <version.org.wildfly.bridge.servlet-api-bridge>1.0.1.Final</version.org.wildfly.bridge.servlet-api-bridge>
         <version.org.wildfly.cdi-api-bridge>1.0.1.Final</version.org.wildfly.cdi-api-bridge>
         <version.org.wildfly.checkstyle-config>1.0.7.Final</version.org.wildfly.checkstyle-config>
+        <version.org.wildfly.discovery>1.1.0.Final</version.org.wildfly.discovery>
         <version.org.wildfly.http-client>1.0.12.Final</version.org.wildfly.http-client>
         <version.org.wildfly.maven.plugins>1.0.0</version.org.wildfly.maven.plugins>
         <version.org.wildfly.naming-client>1.0.8.Final</version.org.wildfly.naming-client>
@@ -393,6 +394,22 @@
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>wildfly-clustering-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>wildfly-clustering-discovery</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>wildfly-clustering-discovery-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>wildfly-clustering-discovery-spi</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -5851,6 +5868,12 @@
                 <groupId>org.wildfly.checkstyle</groupId>
                 <artifactId>wildfly-checkstyle-config</artifactId>
                 <version>${version.org.wildfly.checkstyle-config}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.wildfly.discovery</groupId>
+                <artifactId>wildfly-discovery-client</artifactId>
+                <version>${version.org.wildfly.discovery}</version>
             </dependency>
 
             <dependency>

@@ -44,6 +44,7 @@
     <modules>
         <module>api</module>
         <module>common</module>
+        <module>discovery</module>
         <module>ee</module>
         <module>ejb</module>
         <module>infinispan</module>

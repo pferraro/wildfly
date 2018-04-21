@@ -83,7 +83,7 @@ public class PropertiesAttributeDefinition extends MapAttributeDefinition {
         public void marshallAsElement(AttributeDefinition attribute, ModelNode model, boolean marshallDefault, XMLStreamWriter writer) throws XMLStreamException {
             if (model.hasDefined(attribute.getName())) {
                 for (Property property : model.get(attribute.getName()).asPropertyList()) {
-                    writer.writeStartElement(Element.PROPERTY.getLocalName());
+                    writer.writeStartElement(attribute.getXmlName());
                     writer.writeAttribute(Element.NAME.getLocalName(), property.getName());
                     writer.writeCharacters(property.getValue().asString());
                     writer.writeEndElement();
@@ -110,8 +110,9 @@ public class PropertiesAttributeDefinition extends MapAttributeDefinition {
 
         public Builder(String name) {
             super(name);
-            setRequired(false);
+            this.setRequired(false);
             this.setAllowNullElement(false);
+            this.setXmlName(Element.PROPERTY.getLocalName());
             setAttributeMarshaller(MARSHALLER);
             setAttributeParser(PARSER);
         }

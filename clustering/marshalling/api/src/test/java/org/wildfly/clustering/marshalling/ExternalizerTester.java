@@ -52,7 +52,9 @@ public class ExternalizerTester<T> {
     }
 
     public void test(T subject) throws IOException, ClassNotFoundException {
-        assertTrue(this.externalizer.getTargetClass().isInstance(subject));
+        if (subject != null) {
+            assertTrue(this.externalizer.getTargetClass().isInstance(subject));
+        }
 
         ByteArrayOutputStream externalizedOutput = new ByteArrayOutputStream();
         try (ObjectOutputStream output = new ObjectOutputStream(externalizedOutput)) {
@@ -63,7 +65,9 @@ public class ExternalizerTester<T> {
 
         try (ObjectInputStream input = new ObjectInputStream(new ByteArrayInputStream(externalizedBytes))) {
             T result = this.externalizer.readObject(input);
-            assertTrue(this.externalizer.getTargetClass().isInstance(result));
+            if (result != null) {
+                assertTrue(this.externalizer.getTargetClass().isInstance(result));
+            }
             this.assertion.accept(subject, result);
         }
 

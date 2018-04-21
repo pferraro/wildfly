@@ -81,7 +81,8 @@ public class CredentialSourceDependency implements ValueDependency<CredentialSou
             super(null);
         }
 
-        protected ServiceBuilder getDelegate() {
+        @Override
+        protected ServiceBuilder<Object> getDelegate() {
             throw new IllegalStateException();
         }
 

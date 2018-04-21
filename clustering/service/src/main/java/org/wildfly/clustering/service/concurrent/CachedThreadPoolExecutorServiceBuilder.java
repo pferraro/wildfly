@@ -21,6 +21,7 @@
  */
 package org.wildfly.clustering.service.concurrent;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -42,7 +43,7 @@ import org.wildfly.clustering.service.SuppliedValueService;
  * Service that provides an {@link Executor} that uses a cached thread pool.
  * @author Paul Ferraro
  */
-public class CachedThreadPoolExecutorServiceBuilder implements Builder<ExecutorService>, Function<ExecutorService, ExecutorService>, Supplier<ExecutorService>, Consumer<ExecutorService> {
+public class CachedThreadPoolExecutorServiceBuilder implements Builder<Executor>, Function<ExecutorService, Executor>, Supplier<ExecutorService>, Consumer<ExecutorService> {
 
     private final ServiceName name;
     private final ThreadFactory factory;
@@ -53,7 +54,7 @@ public class CachedThreadPoolExecutorServiceBuilder implements Builder<ExecutorS
     }
 
     @Override
-    public ExecutorService apply(ExecutorService executor) {
+    public Executor apply(ExecutorService executor) {
         return JBossExecutors.protectedExecutorService(executor);
     }
 
@@ -73,8 +74,8 @@ public class CachedThreadPoolExecutorServiceBuilder implements Builder<ExecutorS
     }
 
     @Override
-    public ServiceBuilder<ExecutorService> build(ServiceTarget target) {
-        Service<ExecutorService> service = new SuppliedValueService<>(this, this, this);
+    public ServiceBuilder<Executor> build(ServiceTarget target) {
+        Service<Executor> service = new SuppliedValueService<>(this, this, this);
         return new AsynchronousServiceBuilder<>(this.name, service).startSynchronously().build(target).setInitialMode(ServiceController.Mode.ON_DEMAND);
     }
 }
