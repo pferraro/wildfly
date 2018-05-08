@@ -45,6 +45,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -69,6 +71,8 @@ public class CollectionExternalizerTestCase {
         new ExternalizerTester<>(DefaultExternalizer.HASH_SET.cast(HashSet.class), CollectionExternalizerTestCase::assertCollectionEquals).test(new HashSet<>(basis));
         new ExternalizerTester<>(DefaultExternalizer.LINKED_HASH_SET.cast(LinkedHashSet.class), CollectionExternalizerTestCase::assertCollectionEquals).test(new LinkedHashSet<>(basis));
         new ExternalizerTester<>(DefaultExternalizer.LINKED_LIST.cast(LinkedList.class), CollectionExternalizerTestCase::assertCollectionEquals).test(new LinkedList<>(basis));
+        new ExternalizerTester<>(DefaultExternalizer.LINKED_BLOCKING_DEQUE.cast(LinkedBlockingDeque.class), CollectionExternalizerTestCase::assertCollectionEquals).test(new LinkedBlockingDeque<>(basis));
+        new ExternalizerTester<>(DefaultExternalizer.LINKED_BLOCKING_QUEUE.cast(LinkedBlockingQueue.class), CollectionExternalizerTestCase::assertCollectionEquals).test(new LinkedBlockingQueue<>(basis));
 
         ConcurrentHashMap.KeySetView<Object, Boolean> keySetView = ConcurrentHashMap.newKeySet();
         keySetView.addAll(basis);

@@ -60,6 +60,8 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -144,6 +146,8 @@ public enum DefaultExternalizer implements Externalizer<Object> {
     EMPTY_SORTED_SET(new ValueExternalizer<>(Collections.emptySortedSet())),
     HASH_MAP(new MapExternalizer<>(HashMap.class, HashMap::new)),
     HASH_SET(new CollectionExternalizer<>(HashSet.class, HashSet::new)),
+    LINKED_BLOCKING_DEQUE(new CollectionExternalizer<>(LinkedBlockingDeque.class, LinkedBlockingDeque::new)),
+    LINKED_BLOCKING_QUEUE(new CollectionExternalizer<>(LinkedBlockingQueue.class, LinkedBlockingQueue::new)),
     LINKED_HASH_MAP(new MapExternalizer<>(LinkedHashMap.class, LinkedHashMap::new)),
     LINKED_HASH_SET(new CollectionExternalizer<>(LinkedHashSet.class, LinkedHashSet::new)),
     LINKED_LIST(new CollectionExternalizer<>(LinkedList.class, size -> new LinkedList<>())),
