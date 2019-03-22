@@ -66,7 +66,7 @@ import org.wildfly.clustering.spi.NodeFactory;
 import org.wildfly.clustering.web.IdentifierFactory;
 import org.wildfly.clustering.web.infinispan.AffinityIdentifierFactory;
 import org.wildfly.clustering.web.infinispan.session.coarse.CoarseSessionAttributesFactory;
-import org.wildfly.clustering.web.infinispan.session.fine.FineSessionAttributesFactory;
+import org.wildfly.clustering.web.infinispan.session.finer.FineSessionAttributesFactory;
 import org.wildfly.clustering.web.session.ImmutableSession;
 import org.wildfly.clustering.web.session.SessionExpirationListener;
 import org.wildfly.clustering.web.session.SessionManager;
@@ -189,7 +189,7 @@ public class InfinispanSessionManagerFactory<C extends Marshallability, L> imple
 
         switch (config.getAttributePersistenceStrategy()) {
             case FINE: {
-                return new FineSessionAttributesFactory<>(configuration.getCache(), configuration.getCache(), new MarshalledValueMarshaller<>(factory, context), this.properties);
+                return new FineSessionAttributesFactory<>(configuration.getCache(), new MarshalledValueMarshaller<>(factory, context), this.properties);
             }
             case COARSE: {
                 return new CoarseSessionAttributesFactory<>(configuration.getCache(), new MarshalledValueMarshaller<>(factory, context), this.properties);

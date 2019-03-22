@@ -36,5 +36,6 @@
         <module name="org.infinispan"/>
         <module name="org.infinispan.commons"/>
         <module name="org.wildfly.clustering.ee.spi"/>
+        <module name="org.wildfly.clustering.infinispan.spi"/>
     </dependencies>
 </module>

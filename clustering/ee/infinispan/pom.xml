@@ -47,8 +47,8 @@
             <artifactId>wildfly-clustering-ee-spi</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.infinispan</groupId>
-            <artifactId>infinispan-core</artifactId>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>wildfly-clustering-infinispan-spi</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jboss.spec.javax.transaction</groupId>
