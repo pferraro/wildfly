@@ -39,6 +39,8 @@ import org.wildfly.clustering.ee.Batcher;
 import org.wildfly.clustering.ee.Remover;
 import org.wildfly.clustering.ee.cache.tx.TransactionBatch;
 import org.wildfly.clustering.infinispan.spi.distribution.Locality;
+import org.wildfly.clustering.service.concurrent.ServiceExecutor;
+import org.wildfly.clustering.service.concurrent.StampedLockServiceExecutor;
 import org.wildfly.clustering.web.cache.session.ImmutableSessionMetaDataFactory;
 import org.wildfly.clustering.web.infinispan.logging.InfinispanWebLogger;
 import org.wildfly.clustering.web.session.ImmutableSessionMetaData;
@@ -49,7 +51,7 @@ import org.wildfly.clustering.web.session.SessionExpirationListener;
  * If/When Infinispan implements expiration notifications (ISPN-694), this will be obsolete.
  * @author Paul Ferraro
  */
-public class SessionExpirationScheduler<MV> implements Scheduler {
+public class SessionExpirationScheduler<MV> implements Scheduler, Runnable {
 
     final Collection<SessionExpirationListener> listeners = new CopyOnWriteArraySet<>();
     final Map<String, Future<?>> expirationFutures = new ConcurrentHashMap<>();
@@ -57,6 +59,7 @@ public class SessionExpirationScheduler<MV> implements Scheduler {
     final Remover<String> remover;
     private final ImmutableSessionMetaDataFactory<MV> metaDataFactory;
     private final ScheduledExecutorService executor;
+    private final ServiceExecutor serviceExecutor = new StampedLockServiceExecutor();
 
     public SessionExpirationScheduler(Batcher<TransactionBatch> batcher, ImmutableSessionMetaDataFactory<MV> metaDataFactory, Remover<String> remover) {
         this(batcher, metaDataFactory, remover, createScheduledExecutor());
@@ -86,13 +89,21 @@ public class SessionExpirationScheduler<MV> implements Scheduler {
 
     @Override
     public void schedule(String sessionId) {
-        try (Batch batch = this.batcher.createBatch()) {
-            MV value = this.metaDataFactory.findValue(sessionId);
-            if (value != null) {
-                ImmutableSessionMetaData metaData = this.metaDataFactory.createImmutableSessionMetaData(sessionId, value);
-                this.schedule(sessionId, metaData);
+        Batcher<TransactionBatch> batcher = this.batcher;
+        ImmutableSessionMetaDataFactory<MV> metaDataFactory = this.metaDataFactory;
+        Runnable task = new Runnable() {
+            @Override
+            public void run() {
+                try (Batch batch = batcher.createBatch()) {
+                    MV value = metaDataFactory.findValue(sessionId);
+                    if (value != null) {
+                        ImmutableSessionMetaData metaData = metaDataFactory.createImmutableSessionMetaData(sessionId, value);
+                        SessionExpirationScheduler.this.schedule(sessionId, metaData);
+                    }
+                }
             }
-        }
+        };
+        this.serviceExecutor.execute(task);
     }
 
     @Override
@@ -122,6 +133,11 @@ public class SessionExpirationScheduler<MV> implements Scheduler {
 
     @Override
     public void close() {
+        this.serviceExecutor.close(this);
+    }
+
+    @Override
+    public void run() {
         this.executor.shutdown();
         for (Future<?> future : this.expirationFutures.values()) {
             future.cancel(true);

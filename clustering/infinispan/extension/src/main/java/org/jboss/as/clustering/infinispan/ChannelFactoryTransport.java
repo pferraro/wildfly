@@ -70,7 +70,7 @@ public class ChannelFactoryTransport extends JGroupsTransport {
     @Override
     protected void initChannel() {
         try {
-            this.channel = this.factory.createChannel(this.configuration.globalJmxStatistics().cacheManagerName());
+            this.channel = this.factory.createChannel(this.configuration.cacheManagerName());
             this.channel.setDiscardOwnMessages(false);
         } catch (Exception e) {
             throw new CacheException(e);
