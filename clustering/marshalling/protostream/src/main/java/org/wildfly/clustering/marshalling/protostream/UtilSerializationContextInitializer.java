@@ -40,6 +40,8 @@ public class UtilSerializationContextInitializer extends AbstractSerializationCo
 
     @Override
     public void registerMarshallers(SerializationContext context) {
-        context.registerMarshallerProvider(new ExternalizerMarshallerProvider(EnumSet.allOf(UtilExternalizerProvider.class)));
+        context.registerMarshallerProvider(new ExternalizerMarshallerProvider(EnumSet.complementOf(EnumSet.of(UtilExternalizerProvider.UUID))));
+        // Override UUID marshaller to use fixed size long values
+        context.registerMarshaller(UUIDMarshaller.INSTANCE);
     }
 }
