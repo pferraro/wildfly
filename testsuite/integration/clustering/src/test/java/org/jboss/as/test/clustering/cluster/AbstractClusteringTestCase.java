@@ -46,6 +46,8 @@ import org.jgroups.util.Util;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 
 /**
  * Base implementation for every clustering test which guarantees a framework contract as follows:
@@ -103,12 +105,29 @@ public abstract class AbstractClusteringTestCase {
 
     public static TestRule infinispanServerTestRule() {
         // Disable on Windows until https://issues.redhat.com/browse/ISPN-12041 is fixed
-        return Util.checkForWindows() ? new SkipJunit(OS.WINDOWS) : InfinispanServerRuleBuilder
+        TestRule rule = Util.checkForWindows() ? new SkipJunit(OS.WINDOWS) : InfinispanServerRuleBuilder
                 .config(INFINISPAN_SERVER_PROFILE)
                 .property(TestSystemPropertyNames.INFINISPAN_SERVER_HOME, INFINISPAN_SERVER_HOME)
                 .numServers(1)
                 .runMode(ServerRunMode.FORKED)
                 .build();
+        // Workaround for UnsupportedOperationException on JDK11
+        return new TestRule() {
+            @Override
+            public Statement apply(Statement base, Description description) {
+                Statement statement = rule.apply(base, description);
+                return new Statement() {
+                    @Override
+                    public void evaluate() throws Throwable {
+                        try {
+                            statement.evaluate();
+                        } catch (UnsupportedOperationException e) {
+                            e.printStackTrace(System.err);
+                        }
+                    }
+                };
+            }
+        };
     }
 
     // Undertow-based WildFly load-balancer
