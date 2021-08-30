@@ -23,8 +23,9 @@ package org.jboss.as.ejb3.timerservice.persistence.filestore;
 
 import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.ejb3.component.stateful.CurrentSynchronizationCallback;
+import org.jboss.as.ejb3.timerservice.Timer;
+import org.jboss.as.ejb3.timerservice.TimerService;
 import org.jboss.as.ejb3.timerservice.TimerImpl;
-import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
 import org.jboss.as.ejb3.timerservice.TimerState;
 import org.jboss.as.ejb3.timerservice.persistence.TimerPersistence;
 import org.jboss.marshalling.MarshallerFactory;
@@ -159,46 +160,46 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
     }
 
     @Override
-    public FileTimerPersistence getValue() throws IllegalStateException, IllegalArgumentException {
+    public FileTimerPersistence getValue() {
         return this;
     }
 
     @Override
-    public void addTimer(final TimerImpl TimerImpl) {
+    public void addTimer(final Timer timer) {
         if(WildFlySecurityManager.isChecking()) {
             WildFlySecurityManager.doUnchecked(new PrivilegedAction<Object>() {
                 @Override
                 public Object run() {
-                    persistTimer(TimerImpl, true);
+                    persistTimer(timer, true);
                     return null;
                 }
             });
         } else {
-            persistTimer(TimerImpl, true);
+            persistTimer(timer, true);
         }
     }
 
     @Override
-    public void persistTimer(final TimerImpl TimerImpl) {
+    public void persistTimer(final Timer timer) {
         if(WildFlySecurityManager.isChecking()) {
             WildFlySecurityManager.doUnchecked(new PrivilegedAction<Object>() {
                 @Override
                 public Object run() {
-                    persistTimer(TimerImpl, false);
+                    persistTimer(timer, false);
                     return null;
                 }
             });
         } else {
-            persistTimer(TimerImpl, false);
+            persistTimer(timer, false);
         }
     }
 
     @Override
-    public boolean shouldRun(TimerImpl timer, TransactionManager tm) {
+    public boolean shouldRun(Timer timer, TransactionManager tm) {
         return true;
     }
 
-    private void persistTimer(final TimerImpl timer, boolean newTimer) {
+    private void persistTimer(final Timer timer, boolean newTimer) {
         final Lock lock = getLock(timer.getTimedObjectId());
         try {
             final int status = transactionManager.getValue().getStatus();
@@ -212,7 +213,7 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
             if (status == Status.STATUS_NO_TRANSACTION ||
                     status == Status.STATUS_UNKNOWN || isBeforeCompletion()
                     || status == Status.STATUS_COMMITTED) {
-                Map<String, TimerImpl> map = getTimers(timer.getTimedObjectId(), timer.getTimerService());
+                Map<String, Timer> map = getTimers(timer.getTimedObjectId(), timer.getTimerService());
                 if (timer.getState() == TimerState.CANCELED ||
                         timer.getState() == TimerState.EXPIRED) {
                     map.remove(timer.getId());
@@ -241,7 +242,7 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
         }
     }
 
-    private String timerTransactionKey(final TimerImpl TimerImpl) {
+    private String timerTransactionKey(final Timer TimerImpl) {
         return "org.jboss.as.ejb3.timerTransactionKey." + TimerImpl.getId();
     }
 
@@ -267,14 +268,14 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
     }
 
     @Override
-    public List<TimerImpl> loadActiveTimers(final String timedObjectId, final TimerServiceImpl timerService) {
+    public List<Timer> loadActiveTimers(final String timedObjectId, final TimerService timerService) {
         final Lock lock = getLock(timedObjectId);
         try {
             lock.lock();
-            final Map<String, TimerImpl> timers = getTimers(timedObjectId, timerService);
+            final Map<String, Timer> timers = getTimers(timedObjectId, timerService);
 
-            final List<TimerImpl> entities = new ArrayList<TimerImpl>();
-            for (Map.Entry<String, TimerImpl> entry : timers.entrySet()) {
+            final List<Timer> entities = new ArrayList<>();
+            for (Map.Entry<String, Timer> entry : timers.entrySet()) {
                 entities.add(mostRecentEntityVersion(entry.getValue()));
             }
             return entities;
@@ -296,16 +297,16 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
      * Returns either the loaded entity or the most recent version of the entity that has
      * been persisted in this transaction.
      */
-    private TimerImpl mostRecentEntityVersion(final TimerImpl timerImpl) {
+    private Timer mostRecentEntityVersion(final Timer timer) {
         try {
             final int status = transactionManager.getValue().getStatus();
             if (status == Status.STATUS_UNKNOWN ||
                     status == Status.STATUS_NO_TRANSACTION) {
-                return timerImpl;
+                return timer;
             }
-            final String key = timerTransactionKey(timerImpl);
-            TimerImpl existing = (TimerImpl) transactionSynchronizationRegistry.getValue().getResource(key);
-            return existing != null ? existing : timerImpl;
+            final String key = timerTransactionKey(timer);
+            Timer existing = (Timer) transactionSynchronizationRegistry.getValue().getResource(key);
+            return existing != null ? existing : timer;
         } catch (SystemException e) {
             throw new RuntimeException(e);
         }
@@ -329,16 +330,16 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
      * @param timedObjectId The timed object id
      * @return The timers for the object
      */
-    private Map<String, TimerImpl> getTimers(final String timedObjectId, final TimerServiceImpl timerService) {
+    private Map<String, Timer> getTimers(final String timedObjectId, final TimerService timerService) {
         return loadTimersFromFile(timedObjectId, timerService);
     }
 
-    private Map<String, TimerImpl> loadTimersFromFile(String timedObjectId, TimerServiceImpl timerService) {
-        Map<String, TimerImpl> timers = new HashMap<>();
+    private Map<String, Timer> loadTimersFromFile(String timedObjectId, TimerService timerService) {
+        Map<String, Timer> timers = new HashMap<>();
         String directory = getDirectory(timedObjectId);
 
         timers.putAll(LegacyFileStore.loadTimersFromFile(timedObjectId, timerService, directory, factory, configuration));
-        for(Map.Entry<String, TimerImpl> entry : timers.entrySet()) {
+        for(Map.Entry<String, Timer> entry : timers.entrySet()) {
             writeFile(entry.getValue()); //write legacy timers into the new format
             //the legacy code handling code will write a marker file, to make sure that the old timers will not be loaded on next restart.
         }
@@ -390,9 +391,9 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
         return timers;
     }
 
-    private XMLMapper createMapper(TimerServiceImpl timerService) {
+    private XMLMapper createMapper(TimerService timerService) {
         final XMLMapper mapper = XMLMapper.Factory.create();
-        mapper.registerRootElement(new QName(EjbTimerXmlParser_1_0.NAMESPACE, EjbTimerXmlPersister.TIMERS), new EjbTimerXmlParser_1_0(timerService, factory, configuration, timerService.getTimedObjectInvoker().getValue().getClassLoader()));
+        mapper.registerRootElement(new QName(EjbTimerXmlParser_1_0.NAMESPACE, EjbTimerXmlPersister.TIMERS), new EjbTimerXmlParser_1_0(timerService, factory, configuration, timerService.getInvoker().getClassLoader()));
         return mapper;
     }
 
@@ -455,7 +456,7 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
                     try {
                         lock.lock();
                         if (status == Status.STATUS_COMMITTED) {
-                            final Map<String, TimerImpl> map = getTimers(timer.getTimedObjectId(), timer.getTimerService());
+                            final Map<String, Timer> map = getTimers(timer.getTimedObjectId(), timer.getTimerService());
                             if (timer.getState() == TimerState.CANCELED ||
                                     timer.getState() == TimerState.EXPIRED) {
                                 map.remove(timer.getId());
@@ -478,7 +479,7 @@ public class FileTimerPersistence implements TimerPersistence, Service<FileTimer
 
     }
 
-    private void writeFile(TimerImpl timer) {
+    private void writeFile(Timer timer) {
         final File file = fileName(timer.getTimedObjectId(), timer.getId());
 
         //if the timer is expired or cancelled delete the file

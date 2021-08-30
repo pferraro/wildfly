@@ -45,16 +45,11 @@ import static org.jboss.as.ejb3.logging.EjbLogger.EJB3_TIMER_LOGGER;
  * @author Wolf-Dieter Fink
  * @version $Revision: $
  */
-public class TimerTask<T extends TimerImpl> implements Runnable {
+public class TimerTask<T extends Timer> implements Runnable {
 
     protected final String timedObjectId;
     protected final String timerId;
-
-
-    /**
-     * {@link org.jboss.as.ejb3.timerservice.TimerServiceImpl} to which this {@link TimerTask} belongs
-     */
-    protected final TimerServiceImpl timerService;
+    protected final TimerService timerService;
 
     private volatile boolean cancelled = false;
 
@@ -90,7 +85,7 @@ public class TimerTask<T extends TimerImpl> implements Runnable {
     public void run() {
         ClassLoader old = WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(getClass());
         try {
-            final TimerImpl timer = timerService.getTimer(timerId);
+            final Timer timer = timerService.getTimer(timerId);
             try {
                 if (cancelled) {
                     EJB3_TIMER_LOGGER.debugf("Timer task was cancelled for %s", timer);
@@ -179,18 +174,18 @@ public class TimerTask<T extends TimerImpl> implements Runnable {
         }
     }
 
-    protected void scheduleTimeoutIfRequired(TimerImpl timer) {
+    protected void scheduleTimeoutIfRequired(Timer timer) {
     }
 
-    protected void callTimeout(TimerImpl timer) throws Exception {
+    protected void callTimeout(Timer timer) throws Exception {
         invokeBeanMethod(timer);
     }
 
-    protected void invokeBeanMethod(TimerImpl timer) throws Exception {
+    protected void invokeBeanMethod(Timer timer) throws Exception {
         timerService.getInvoker().callTimeout(timer);
     }
 
-    protected Date calculateNextTimeout(TimerImpl timer) {
+    protected Date calculateNextTimeout(Timer timer) {
         long intervalDuration = timer.getInterval();
         if (intervalDuration > 0) {
             long now = new Date().getTime();
@@ -204,7 +199,7 @@ public class TimerTask<T extends TimerImpl> implements Runnable {
 
     }
 
-    protected void retryTimeout(TimerImpl timer) throws Exception {
+    protected void retryTimeout(Timer timer) throws Exception {
         if (timer.isActive()) {
             EJB3_TIMER_LOGGER.retryingTimeout(timer);
             timer.setTimerState(TimerState.RETRY_TIMEOUT);
@@ -221,7 +216,7 @@ public class TimerTask<T extends TimerImpl> implements Runnable {
      *
      * @param timer timer to post processing and persist
      */
-    protected void postTimeoutProcessing(TimerImpl timer) {
+    protected void postTimeoutProcessing(Timer timer) {
         timer.lock();
         try {
             TimerState timerState = timer.getState();

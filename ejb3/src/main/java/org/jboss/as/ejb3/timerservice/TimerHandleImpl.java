@@ -24,7 +24,6 @@ package org.jboss.as.ejb3.timerservice;
 import java.security.AccessController;
 
 import javax.ejb.EJBException;
-import javax.ejb.Timer;
 import javax.ejb.TimerHandle;
 
 import org.jboss.as.ejb3.logging.EjbLogger;
@@ -58,7 +57,7 @@ public class TimerHandleImpl implements TimerHandle {
     /**
      * The {@link TimerServiceImpl} to which this timer handle belongs to
      */
-    private transient TimerServiceImpl service;
+    private transient TimerService service;
 
     /**
      * Creates a {@link TimerHandleImpl}
@@ -68,7 +67,7 @@ public class TimerHandleImpl implements TimerHandle {
      * @param service       The timer service to which this timer handle belongs to
      * @throws IllegalArgumentException If either of the passed parameters is null
      */
-    public TimerHandleImpl(final String id, final String timedObjectId, final TimerServiceImpl service) throws IllegalArgumentException {
+    public TimerHandleImpl(final String id, final String timedObjectId, final TimerService service) throws IllegalArgumentException {
         if (id == null) {
             throw EjbLogger.EJB3_TIMER_LOGGER.idIsNull();
         }
@@ -90,7 +89,7 @@ public class TimerHandleImpl implements TimerHandle {
      * <p/>
      * {@inheritDoc}
      */
-    public Timer getTimer() throws IllegalStateException, EJBException {
+    public javax.ejb.Timer getTimer() throws IllegalStateException, EJBException {
         if (service == null) {
             // get hold of the timer service through the use of timed object id
             service = (TimerServiceImpl) currentServiceContainer().getRequiredService(ServiceName.parse(serviceName)).getValue();
@@ -98,11 +97,11 @@ public class TimerHandleImpl implements TimerHandle {
                 throw EjbLogger.EJB3_TIMER_LOGGER.timerServiceWithIdNotRegistered(timedObjectId);
             }
         }
-        final TimerImpl timer = this.service.getTimer(this);
+        final Timer timer = this.service.getTimer(this.id);
         if (timer == null || !timer.isActive()) {
             throw EjbLogger.EJB3_TIMER_LOGGER.timerHandleIsNotActive(this);
         }
-        return timer;
+        return new EJBTimer(timer);
     }
 
     public String getId() {

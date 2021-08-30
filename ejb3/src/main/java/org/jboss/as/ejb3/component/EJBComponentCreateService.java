@@ -22,7 +22,6 @@
 
 package org.jboss.as.ejb3.component;
 
-import javax.ejb.TimerService;
 import javax.ejb.TransactionAttributeType;
 import javax.ejb.TransactionManagementType;
 import javax.transaction.TransactionManager;
@@ -50,6 +49,7 @@ import org.jboss.as.ejb3.component.messagedriven.MessageDrivenComponentDescripti
 import org.jboss.as.ejb3.deployment.ApplicationExceptions;
 import org.jboss.as.ejb3.remote.EJBRemoteTransactionsRepository;
 import org.jboss.as.ejb3.security.EJBSecurityMetaData;
+import org.jboss.as.ejb3.timerservice.TimerFactory;
 import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.invocation.InterceptorFactory;
 import org.jboss.invocation.Interceptors;
@@ -77,8 +77,6 @@ public class EJBComponentCreateService extends BasicComponentCreateService {
 
     private final EJBSecurityMetaData securityMetaData;
 
-    private final TimerService timerService;
-
     private final Map<Method, InterceptorFactory> timeoutInterceptors;
 
     private final Method timeoutMethod;
@@ -102,6 +100,7 @@ public class EJBComponentCreateService extends BasicComponentCreateService {
     private final InjectedValue<ServerSecurityManager> serverSecurityManagerInjectedValue = new InjectedValue<>();
     private final InjectedValue<ControlPoint> controlPoint = new InjectedValue<>();
     private final InjectedValue<AtomicBoolean> exceptionLoggingEnabled = new InjectedValue<>();
+    private final InjectedValue<TimerFactory> timerService = new InjectedValue<>();
 
     private final ShutDownInterceptorFactory shutDownInterceptorFactory;
 
@@ -117,7 +116,6 @@ public class EJBComponentCreateService extends BasicComponentCreateService {
         final EJBComponentDescription ejbComponentDescription = (EJBComponentDescription) componentConfiguration.getComponentDescription();
         this.transactionManagementType = ejbComponentDescription.getTransactionManagementType();
 
-        this.timerService = ejbComponentDescription.getTimerService();
         this.policyContextID = ejbComponentDescription.getPolicyContextID();
 
         // CMTTx
@@ -283,8 +281,8 @@ public class EJBComponentCreateService extends BasicComponentCreateService {
         return timeoutInterceptors;
     }
 
-    public TimerService getTimerService() {
-        return timerService;
+    public TimerFactory getTimerService() {
+        return timerService.getValue();
     }
 
     public Method getTimeoutMethod() {
@@ -376,7 +374,7 @@ public class EJBComponentCreateService extends BasicComponentCreateService {
         return this.policyContextID;
     }
 
-    InjectedValue<AtomicBoolean> getExceptionLoggingEnabledInjector() {
+    Injector<AtomicBoolean> getExceptionLoggingEnabledInjector() {
         return exceptionLoggingEnabled;
     }
 
@@ -386,5 +384,9 @@ public class EJBComponentCreateService extends BasicComponentCreateService {
 
     public ShutDownInterceptorFactory getShutDownInterceptorFactory() {
         return shutDownInterceptorFactory;
+    }
+
+    public Injector<TimerFactory> getTimerServiceInjector() {
+        return this.timerService;
     }
 }

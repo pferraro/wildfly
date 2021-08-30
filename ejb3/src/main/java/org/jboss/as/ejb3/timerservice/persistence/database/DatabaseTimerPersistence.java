@@ -47,10 +47,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.ejb.ScheduleExpression;
 import javax.sql.DataSource;
 import javax.transaction.HeuristicMixedException;
 import javax.transaction.HeuristicRollbackException;
@@ -61,13 +61,16 @@ import javax.transaction.TransactionManager;
 
 import org.jboss.as.ejb3.logging.EjbLogger;
 import org.jboss.as.ejb3.timerservice.CalendarTimer;
+import org.jboss.as.ejb3.timerservice.Timer;
+import org.jboss.as.ejb3.timerservice.TimerService;
 import org.jboss.as.ejb3.timerservice.TimerImpl;
-import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
 import org.jboss.as.ejb3.timerservice.TimerState;
 import org.jboss.as.ejb3.timerservice.persistence.TimeoutMethod;
 import org.jboss.as.ejb3.timerservice.persistence.TimerPersistence;
+import org.jboss.as.ejb3.timerservice.schedule.CalendarBasedTimeout;
 import org.jboss.as.naming.ManagedReference;
 import org.jboss.as.naming.ManagedReferenceFactory;
+import org.jboss.as.server.ServerEnvironment;
 import org.jboss.marshalling.InputStreamByteInput;
 import org.jboss.marshalling.Marshaller;
 import org.jboss.marshalling.MarshallerFactory;
@@ -77,6 +80,7 @@ import org.jboss.marshalling.OutputStreamByteOutput;
 import org.jboss.marshalling.Unmarshaller;
 import org.jboss.marshalling.river.RiverMarshallerFactory;
 import org.jboss.modules.ModuleLoader;
+import org.jboss.msc.inject.Injector;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
@@ -93,11 +97,12 @@ import org.jboss.msc.value.InjectedValue;
  */
 public class DatabaseTimerPersistence implements TimerPersistence, Service<DatabaseTimerPersistence> {
 
-    private final InjectedValue<ManagedReferenceFactory> dataSourceInjectedValue = new InjectedValue<ManagedReferenceFactory>();
-    private final InjectedValue<ModuleLoader> moduleLoader = new InjectedValue<ModuleLoader>();
-    private final Map<String, TimerChangeListener> changeListeners = Collections.synchronizedMap(new HashMap<String, TimerChangeListener>());
+    private final InjectedValue<ManagedReferenceFactory> dataSourceInjectedValue = new InjectedValue<>();
+    private final InjectedValue<ModuleLoader> moduleLoader = new InjectedValue<>();
+    private final InjectedValue<ServerEnvironment> environment = new InjectedValue<>();
+    private final Map<String, TimerChangeListener> changeListeners = Collections.synchronizedMap(new HashMap<>());
 
-    private final InjectedValue<java.util.Timer> timerInjectedValue = new InjectedValue<java.util.Timer>();
+    private final InjectedValue<java.util.Timer> timerInjectedValue = new InjectedValue<>();
 
     private final Map<String, Set<String>> knownTimerIds = new HashMap<>();
 
@@ -107,8 +112,6 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     private final HashSet<String> databaseDialects = new HashSet<String>();
     /** Name of the configured partition name*/
     private final String partition;
-    /** Current node name*/
-    private final String nodeName;
     /** Interval in millis to refresh the timers from the persistence store*/
     private final int refreshInterval;
     /** Flag whether this instance should execute persistent timers*/
@@ -116,6 +119,8 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     private volatile ManagedReference managedReference;
     private volatile DataSource dataSource;
     private volatile Properties sql;
+    /** Current node name*/
+    private volatile String nodeName;
     private MarshallerFactory factory;
     private MarshallingConfiguration configuration;
     private RefreshTask refreshTask;
@@ -129,10 +134,9 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     private static final String DELETE_TIMER = "delete-timer";
     private static final String UPDATE_RUNNING = "update-running";
 
-    public DatabaseTimerPersistence(final String database, String partition, String nodeName, int refreshInterval, boolean allowExecution) {
+    public DatabaseTimerPersistence(final String database, String partition, int refreshInterval, boolean allowExecution) {
         this.database = database;
         this.partition = partition;
-        this.nodeName = nodeName;
         this.refreshInterval = refreshInterval;
         this.allowExecution = allowExecution;
     }
@@ -140,6 +144,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     @Override
     public void start(final StartContext context) throws StartException {
 
+        nodeName = this.environment.getValue().getNodeName();
         factory = new RiverMarshallerFactory();
         configuration = new MarshallingConfiguration();
         configuration.setClassResolver(ModularClassResolver.getInstance(moduleLoader.getValue()));
@@ -173,6 +178,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
         managedReference.release();
         managedReference = null;
         dataSource = null;
+        nodeName = null;
     }
 
     /**
@@ -313,7 +319,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     }
 
     @Override
-    public void addTimer(final TimerImpl timerEntity) {
+    public void addTimer(final Timer timerEntity) {
         String createTimer = sql(CREATE_TIMER);
         Connection connection = null;
         PreparedStatement statement = null;
@@ -336,7 +342,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     }
 
     @Override
-    public void persistTimer(final TimerImpl timerEntity) {
+    public void persistTimer(final Timer timerEntity) {
         Connection connection = null;
         PreparedStatement statement = null;
         ResultSet resultSet = null;
@@ -380,7 +386,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     }
 
     @Override
-    public boolean shouldRun(TimerImpl timer, TransactionManager tm) {
+    public boolean shouldRun(Timer timer, TransactionManager tm) {
         if (!allowExecution) {
             //timers never execute on this node
             return false;
@@ -441,7 +447,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
     }
 
     @Override
-    public List<TimerImpl> loadActiveTimers(final String timedObjectId, final TimerServiceImpl timerService) {
+    public List<Timer> loadActiveTimers(final String timedObjectId, final TimerService timerService) {
         String loadTimer = sql(LOAD_ALL_TIMERS);
         Connection connection = null;
         PreparedStatement statement = null;
@@ -471,7 +477,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
                 knownTimerIds.put(timedObjectId, ids);
                 for(Holder timer : timers) {
                     if(timer.requiresReset) {
-                        TimerImpl ret = timer.timer;
+                        Timer ret = timer.timer;
                         EjbLogger.DEPLOYMENT_LOGGER.loadedPersistentTimerInTimeout(ret.getId(), ret.getTimedObjectId());
                         if(ret.getNextExpiration() == null) {
                             ret.setTimerState(TimerState.CANCELED);
@@ -483,7 +489,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
                     }
                 }
             }
-            List<TimerImpl> ret = new ArrayList<>();
+            List<Timer> ret = new ArrayList<>();
             for(Holder timer : timers) {
                 ret.add(timer.timer);
             }
@@ -513,7 +519,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
         return this;
     }
 
-    private Holder timerFromResult(final ResultSet resultSet, final TimerServiceImpl timerService) throws SQLException {
+    private Holder timerFromResult(final ResultSet resultSet, final TimerService timerService) throws SQLException {
         boolean calendarTimer = resultSet.getBoolean(24);
         final String nodeName = resultSet.getString(25);
         boolean requiresReset = false;
@@ -540,7 +546,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
             if (methodName != null) {
                 final String paramString = resultSet.getString(23);
                 final String[] params = paramString == null || paramString.isEmpty() ? new String[0] : paramString.split(";");
-                final Method timeoutMethod = CalendarTimer.getTimeoutMethod(new TimeoutMethod(clazz, methodName, params), timerService.getTimedObjectInvoker().getValue().getClassLoader());
+                final Method timeoutMethod = CalendarTimer.getTimeoutMethod(new TimeoutMethod(clazz, methodName, params), timerService.getInvoker().getClassLoader());
                 if (timeoutMethod == null) {
                     EjbLogger.EJB3_TIMER_LOGGER.timerReinstatementFailed(resultSet.getString(2), resultSet.getString(1), new NoSuchMethodException());
                     return null;
@@ -563,7 +569,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
         builder.setTimerState(TimerState.valueOf(resultSet.getString(9)));
         builder.setPersistent(true);
 
-        TimerImpl ret =  builder.build(timerService);
+        Timer ret =  builder.build(timerService);
         if(nodeName != null && (nodeName.equals(this.nodeName))) {
             if(ret.getState() == TimerState.IN_TIMEOUT || ret.getState() == TimerState.RETRY_TIMEOUT) {
                 requiresReset = true;
@@ -572,7 +578,7 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
         return new Holder(ret, requiresReset);
     }
 
-    private void statementParameters(final TimerImpl timerEntity, final PreparedStatement statement) throws SQLException {
+    private void statementParameters(final Timer timerEntity, final PreparedStatement statement) throws SQLException {
         statement.setString(1, timerEntity.getId());
         statement.setString(2, timerEntity.getTimedObjectId());
         statement.setTimestamp(3, timestamp(timerEntity.getInitialExpiration()));
@@ -583,18 +589,20 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
         statement.setString(8, serialize(timerEntity.getTimerInfo()));
         statement.setString(9, timerEntity.getState().name());
 
-        if (timerEntity instanceof CalendarTimer) {
+        CalendarBasedTimeout timeout = timerEntity.getCalendarTimeout();
+        if (timeout != null) {
+            ScheduleExpression schedule = timeout.getScheduleExpression();
             final CalendarTimer c = (CalendarTimer) timerEntity;
-            statement.setString(10, c.getScheduleExpression().getSecond());
-            statement.setString(11, c.getScheduleExpression().getMinute());
-            statement.setString(12, c.getScheduleExpression().getHour());
-            statement.setString(13, c.getScheduleExpression().getDayOfWeek());
-            statement.setString(14, c.getScheduleExpression().getDayOfMonth());
-            statement.setString(15, c.getScheduleExpression().getMonth());
-            statement.setString(16, c.getScheduleExpression().getYear());
-            statement.setTimestamp(17, timestamp(c.getScheduleExpression().getStart()));
-            statement.setTimestamp(18, timestamp(c.getScheduleExpression().getEnd()));
-            statement.setString(19, c.getScheduleExpression().getTimezone());
+            statement.setString(10, schedule.getSecond());
+            statement.setString(11, schedule.getMinute());
+            statement.setString(12, schedule.getHour());
+            statement.setString(13, schedule.getDayOfWeek());
+            statement.setString(14, schedule.getDayOfMonth());
+            statement.setString(15, schedule.getMonth());
+            statement.setString(16, schedule.getYear());
+            statement.setTimestamp(17, timestamp(schedule.getStart()));
+            statement.setTimestamp(18, timestamp(schedule.getEnd()));
+            statement.setString(19, schedule.getTimezone());
             statement.setBoolean(20, c.isAutoTimer());
             if (c.isAutoTimer()) {
                 statement.setString(21, c.getTimeoutMethod().getDeclaringClass().getName());
@@ -697,17 +705,20 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
         }
     }
 
-
-    public InjectedValue<ManagedReferenceFactory> getDataSourceInjectedValue() {
+    public Injector<ManagedReferenceFactory> getDataSourceInjector() {
         return dataSourceInjectedValue;
     }
 
-    public InjectedValue<ModuleLoader> getModuleLoader() {
+    public Injector<ModuleLoader> getModuleLoaderInjector() {
         return moduleLoader;
     }
 
-    public InjectedValue<Timer> getTimerInjectedValue() {
+    public Injector<java.util.Timer> getTimerInjector() {
         return timerInjectedValue;
+    }
+
+    public Injector<ServerEnvironment> getServerEnvironmentInjector() {
+        return environment;
     }
 
     private static void safeClose(final Closeable resource) {
@@ -823,20 +834,12 @@ public class DatabaseTimerPersistence implements TimerPersistence, Service<Datab
 
 
     static final class Holder {
-        final TimerImpl timer;
+        final Timer timer;
         final boolean requiresReset;
 
-        Holder(TimerImpl timer, boolean requiresReset) {
+        Holder(Timer timer, boolean requiresReset) {
             this.timer = timer;
             this.requiresReset = requiresReset;
-        }
-
-        public TimerImpl getTimer() {
-            return timer;
-        }
-
-        public boolean isRequiresReset() {
-            return requiresReset;
         }
     }
 }

@@ -42,7 +42,6 @@ import org.jboss.as.ejb3.subsystem.deployment.AbstractEJBComponentRuntimeHandler
 import org.jboss.as.ejb3.subsystem.deployment.EJBComponentType;
 import org.jboss.as.ejb3.subsystem.deployment.InstalledComponent;
 import org.jboss.as.ejb3.subsystem.deployment.TimerServiceResource;
-import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentResourceSupport;
@@ -115,8 +114,7 @@ public class EjbManagementDeploymentUnitProcessor implements DeploymentUnitProce
         if (description.isTimerServiceRequired()) {
             final PathAddress timerServiceAddress = PathAddress.pathAddress(addr.getLastElement(),
                     EJB3SubsystemModel.TIMER_SERVICE_PATH);
-            final TimerServiceResource timerServiceResource = ((TimerServiceImpl) description.getTimerService()).getResource();
-            deploymentResourceSupport.registerDeploymentSubResource(EJB3Extension.SUBSYSTEM_NAME, timerServiceAddress, timerServiceResource);
+            deploymentResourceSupport.registerDeploymentSubResource(EJB3Extension.SUBSYSTEM_NAME, timerServiceAddress, new TimerServiceResource());
         }
     }
 

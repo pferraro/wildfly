@@ -36,8 +36,6 @@ import java.util.ResourceBundle;
 import javax.ejb.EJBException;
 import javax.ejb.NoSuchObjectLocalException;
 import javax.ejb.ScheduleExpression;
-import javax.ejb.Timer;
-import javax.ejb.TimerService;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
@@ -48,9 +46,13 @@ import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.operations.validation.ModelTypeValidator;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.ejb3.logging.EjbLogger;
+import org.jboss.as.ejb3.timerservice.Timer;
+import org.jboss.as.ejb3.timerservice.TimerFactory;
+import org.jboss.as.ejb3.timerservice.schedule.CalendarBasedTimeout;
 import org.jboss.as.ejb3.component.EJBComponent;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
+
 /**
  * Attribute definition for the list of timers associated with an EJB.
  *
@@ -137,7 +139,7 @@ public class TimerAttributeDefinition extends ListAttributeDefinition {
     public static void addTimers(final EJBComponent ejb, final ModelNode response) {
         response.setEmptyList();
         final String name = ejb.getComponentName();
-        TimerService ts = ejb.getTimerService();
+        TimerFactory ts = ejb.getTimerService();
         if (ts != null) {
             for (Timer timer : ts.getTimers()) {
                 ModelNode timerNode = response.add();
@@ -167,7 +169,7 @@ public class TimerAttributeDefinition extends ListAttributeDefinition {
     private static void addNextTimeout(Timer timer, ModelNode timerNode, final String componentName) {
         try {
             final ModelNode detailNode = timerNode.get(NEXT_TIMEOUT);
-            Date d = timer.getNextTimeout();
+            Date d = timer.getNextExpiration();
             if (d != null) {
                 detailNode.set(d.getTime());
             }
@@ -183,17 +185,20 @@ public class TimerAttributeDefinition extends ListAttributeDefinition {
     private static void addSchedule(Timer timer, ModelNode timerNode, final String componentName) {
         try {
             final ModelNode schedNode = timerNode.get(SCHEDULE);
-            ScheduleExpression sched = timer.getSchedule();
-            addScheduleDetailString(schedNode, sched.getYear(), YEAR);
-            addScheduleDetailString(schedNode, sched.getMonth(), MONTH);
-            addScheduleDetailString(schedNode, sched.getDayOfMonth(), DAY_OF_MONTH);
-            addScheduleDetailString(schedNode, sched.getDayOfWeek(), DAY_OF_WEEK);
-            addScheduleDetailString(schedNode, sched.getHour(), HOUR);
-            addScheduleDetailString(schedNode, sched.getMinute(), MINUTE);
-            addScheduleDetailString(schedNode, sched.getSecond(), SECOND);
-            addScheduleDetailString(schedNode, sched.getTimezone(), TIMEZONE);
-            addScheduleDetailDate(schedNode, sched.getStart(), START);
-            addScheduleDetailDate(schedNode, sched.getEnd(), END);
+            CalendarBasedTimeout timeout = timer.getCalendarTimeout();
+            if (timeout != null) {
+                ScheduleExpression sched = timeout.getScheduleExpression();
+                addScheduleDetailString(schedNode, sched.getYear(), YEAR);
+                addScheduleDetailString(schedNode, sched.getMonth(), MONTH);
+                addScheduleDetailString(schedNode, sched.getDayOfMonth(), DAY_OF_MONTH);
+                addScheduleDetailString(schedNode, sched.getDayOfWeek(), DAY_OF_WEEK);
+                addScheduleDetailString(schedNode, sched.getHour(), HOUR);
+                addScheduleDetailString(schedNode, sched.getMinute(), MINUTE);
+                addScheduleDetailString(schedNode, sched.getSecond(), SECOND);
+                addScheduleDetailString(schedNode, sched.getTimezone(), TIMEZONE);
+                addScheduleDetailDate(schedNode, sched.getStart(), START);
+                addScheduleDetailDate(schedNode, sched.getEnd(), END);
+            }
         } catch (IllegalStateException e) {
             // ignore
         } catch (NoSuchObjectLocalException e) {
@@ -206,7 +211,7 @@ public class TimerAttributeDefinition extends ListAttributeDefinition {
     private static void addCalendarTimer(Timer timer, ModelNode timerNode, final String componentName) {
         try {
             final ModelNode detailNode = timerNode.get(CALENDAR_TIMER);
-            boolean b = timer.isCalendarTimer();
+            boolean b = timer.getCalendarTimeout() != null;
             detailNode.set(b);
         } catch (IllegalStateException e) {
             // ignore
@@ -220,7 +225,7 @@ public class TimerAttributeDefinition extends ListAttributeDefinition {
     private static void addPersistent(Timer timer, ModelNode timerNode, final String componentName) {
         try {
             final ModelNode detailNode = timerNode.get(PERSISTENT);
-            boolean b = timer.isPersistent();
+            boolean b = timer.isTimerPersistent();
             detailNode.set(b);
         } catch (IllegalStateException e) {
             // ignore

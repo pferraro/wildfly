@@ -1,8 +1,9 @@
 package org.jboss.as.ejb3.timerservice.persistence.filestore;
 
 import org.jboss.as.ejb3.timerservice.CalendarTimer;
+import org.jboss.as.ejb3.timerservice.Timer;
+import org.jboss.as.ejb3.timerservice.TimerService;
 import org.jboss.as.ejb3.timerservice.TimerImpl;
-import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
 import org.jboss.as.ejb3.timerservice.persistence.CalendarTimerEntity;
 import org.jboss.as.ejb3.timerservice.persistence.TimerEntity;
 import org.jboss.marshalling.InputStreamByteInput;
@@ -36,8 +37,8 @@ public class LegacyFileStore {
 
     public static final String MIGRATION_MARKER = "migrated-to-xml.marker";
 
-    static Map<String, TimerImpl> loadTimersFromFile(final String timedObjectId, final TimerServiceImpl timerService, String directory, MarshallerFactory factory, MarshallingConfiguration configuration) {
-        final Map<String, TimerImpl> timers = new HashMap<String, TimerImpl>();
+    static Map<String, Timer> loadTimersFromFile(final String timedObjectId, final TimerService timerService, String directory, MarshallerFactory factory, MarshallingConfiguration configuration) {
+        final Map<String, Timer> timers = new HashMap<>();
         try {
             final File file = new File(directory);
             if (!file.exists()) {
@@ -80,7 +81,7 @@ public class LegacyFileStore {
                                 .setScheduleExprEndDate(c.getEndDate())
                                 .setScheduleExprTimezone(c.getTimezone())
                                 .setAutoTimer(c.isAutoTimer())
-                                .setTimeoutMethod(CalendarTimer.getTimeoutMethod(c.getTimeoutMethod(), timerService.getTimedObjectInvoker().getValue().getClassLoader()));
+                                .setTimeoutMethod(CalendarTimer.getTimeoutMethod(c.getTimeoutMethod(), timerService.getInvoker().getClassLoader()));
                     } else {
                         builder = TimerImpl.builder();
                     }

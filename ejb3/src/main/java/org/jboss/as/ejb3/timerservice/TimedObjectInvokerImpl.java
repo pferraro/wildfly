@@ -70,7 +70,7 @@ public class TimedObjectInvokerImpl implements TimedObjectInvoker, Serializable,
     }
 
     @Override
-    public void callTimeout(final TimerImpl timer, final Method timeoutMethod) throws Exception {
+    public void callTimeout(final Timer timer, final Method timeoutMethod) throws Exception {
         final Interceptor interceptor;
         synchronized (this) {
             if (!started) {
@@ -82,6 +82,7 @@ public class TimedObjectInvokerImpl implements TimedObjectInvoker, Serializable,
         if(interceptor == null) {
             throw EjbLogger.EJB3_TIMER_LOGGER.failToInvokeTimeout(timeoutMethod);
         }
+        javax.ejb.Timer ejbTimer = new EJBTimer(timer);
         final InterceptorContext context = new InterceptorContext();
         context.setContextData(new HashMap<String, Object>());
         context.setMethod(timeoutMethod);
@@ -89,10 +90,10 @@ public class TimedObjectInvokerImpl implements TimedObjectInvoker, Serializable,
             context.setParameters(new Object[0]);
         } else {
             final Object[] params = new Object[1];
-            params[0] = timer;
+            params[0] = ejbTimer;
             context.setParameters(params);
         }
-        context.setTimer(timer);
+        context.setTimer(ejbTimer);
         context.putPrivateData(Component.class, ejbComponent.getValue());
         context.putPrivateData(MethodIntf.class, MethodIntf.TIMER);
         context.putPrivateData(InvocationType.class, InvocationType.TIMER);
@@ -105,7 +106,7 @@ public class TimedObjectInvokerImpl implements TimedObjectInvoker, Serializable,
     }
 
     @Override
-    public void callTimeout(final TimerImpl timer) throws Exception {
+    public void callTimeout(final Timer timer) throws Exception {
         callTimeout(timer, ejbComponent.getValue().getTimeoutMethod());
     }
 

@@ -48,7 +48,6 @@ import javax.ejb.NoSuchObjectLocalException;
 import javax.ejb.ObjectNotFoundException;
 import javax.ejb.RemoveException;
 import javax.ejb.ScheduleExpression;
-import javax.ejb.Timer;
 import javax.ejb.TimerHandle;
 import javax.ejb.TransactionAttributeType;
 import javax.interceptor.InvocationContext;
@@ -85,7 +84,7 @@ import org.jboss.as.ejb3.deployment.DeploymentModuleIdentifier;
 import org.jboss.as.ejb3.subsystem.EJB3SubsystemModel;
 import org.jboss.as.ejb3.subsystem.deployment.EJBComponentType;
 import org.jboss.as.ejb3.subsystem.deployment.InstalledComponent;
-import org.jboss.as.ejb3.timerservice.TimerImpl;
+import org.jboss.as.ejb3.timerservice.Timer;
 import org.jboss.as.ejb3.timerservice.persistence.TimeoutMethod;
 import org.jboss.as.ejb3.tx.TimerTransactionRolledBackException;
 import org.jboss.as.naming.context.NamespaceContextSelector;
@@ -291,7 +290,7 @@ public interface EjbLogger extends BasicLogger {
      */
     @LogMessage(level = INFO)
     @Message(id = 17, value = "Next expiration is null. No tasks will be scheduled for timer %S")
-    void nextExpirationIsNull(TimerImpl timer);
+    void nextExpirationIsNull(Timer timer);
 
     /**
      * Logs an error message indicating Ignoring exception during setRollbackOnly
@@ -2253,7 +2252,7 @@ public interface EjbLogger extends BasicLogger {
      * @return an {@link NoMoreTimeoutsException} for the error.
      */
     @Message(id = 328, value = "No more timeouts for timer %s")
-    NoMoreTimeoutsException noMoreTimeoutForTimer(TimerImpl timer);
+    NoMoreTimeoutsException noMoreTimeoutForTimer(Timer timer);
 
     /**
      * Creates an exception indicating the timer is not a calendar based timer"
@@ -2261,7 +2260,7 @@ public interface EjbLogger extends BasicLogger {
      * @return an {@link IllegalStateException for the error.
      */
     @Message(id = 329, value = "Timer %s is not a calendar based timer")
-    IllegalStateException invalidTimerNotCalendarBaseTimer(final TimerImpl timer);
+    IllegalStateException invalidTimerNotCalendarBaseTimer(final Timer timer);
 
     /**
      * Creates an exception indicating the Timer has expired
@@ -2285,7 +2284,7 @@ public interface EjbLogger extends BasicLogger {
      * @return an {@link IllegalStateException} for the error.
      */
     @Message(id = 332, value = "Timer %s is not persistent")
-    IllegalStateException failToPersistTimer(TimerImpl timer);
+    IllegalStateException failToPersistTimer(Timer timer);
 
     /**
      * Creates an exception indicating it could not register with tx for timer cancellation

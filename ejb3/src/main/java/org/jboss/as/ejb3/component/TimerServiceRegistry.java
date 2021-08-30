@@ -22,12 +22,14 @@
 
 package org.jboss.as.ejb3.component;
 
-import javax.ejb.Timer;
-import javax.ejb.TimerService;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+
+import org.jboss.as.ejb3.timerservice.Timer;
+import org.jboss.as.ejb3.timerservice.TimerManager;
+import org.jboss.as.ejb3.timerservice.TimerManagerRegistry;
 
 /**
  * A registry to which individual {@link javax.ejb.TimerService timer services} can register to (and un-register from). The main purpose
@@ -41,28 +43,31 @@ import java.util.Set;
  *
  * @author Jaikiran Pai
  */
-public class TimerServiceRegistry {
+public class TimerServiceRegistry implements TimerManagerRegistry {
 
-    private final Set<TimerService> timerServices = Collections.synchronizedSet(new HashSet<TimerService>());
+    private final Set<TimerManager> timerServices = Collections.synchronizedSet(new HashSet<>());
 
-    public void registerTimerService(final TimerService timerService) {
+    @Override
+    public void registerTimerService(final TimerManager timerService) {
         if (timerService == null) {
             return;
         }
         timerServices.add(timerService);
     }
 
-    public boolean unRegisterTimerService(final TimerService timerService) {
+    @Override
+    public boolean unregisterTimerService(final TimerManager timerService) {
         if (timerService == null) {
             return false;
         }
         return timerServices.remove(timerService);
     }
 
+    @Override
     public Collection<Timer> getAllActiveTimers() {
         final Collection<Timer> activeTimers = new HashSet<>();
         synchronized (timerServices) {
-            for (final TimerService timerService : timerServices) {
+            for (final TimerManager timerService : timerServices) {
                 activeTimers.addAll(timerService.getTimers());
             }
         }

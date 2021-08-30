@@ -68,8 +68,9 @@ import javax.xml.stream.XMLStreamException;
 import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.as.ejb3.logging.EjbLogger;
 import org.jboss.as.ejb3.timerservice.CalendarTimer;
+import org.jboss.as.ejb3.timerservice.Timer;
+import org.jboss.as.ejb3.timerservice.TimerService;
 import org.jboss.as.ejb3.timerservice.TimerImpl;
-import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
 import org.jboss.as.ejb3.timerservice.TimerState;
 import org.jboss.as.ejb3.timerservice.persistence.TimeoutMethod;
 import org.jboss.marshalling.ByteBufferInput;
@@ -84,16 +85,16 @@ import org.jboss.staxmapper.XMLExtendedStreamReader;
  *
  * @author Stuart Douglas
  */
-public class EjbTimerXmlParser_1_0 implements XMLElementReader<List<TimerImpl>> {
+public class EjbTimerXmlParser_1_0 implements XMLElementReader<List<Timer>> {
 
     public static final String NAMESPACE = "urn:jboss:wildfly:ejb-timers:1.0";
 
-    private final TimerServiceImpl timerService;
+    private final TimerService timerService;
     private final MarshallerFactory factory;
     private final MarshallingConfiguration configuration;
     private final ClassLoader classLoader;
 
-    public EjbTimerXmlParser_1_0(TimerServiceImpl timerService, MarshallerFactory factory, MarshallingConfiguration configuration, ClassLoader classLoader) {
+    public EjbTimerXmlParser_1_0(TimerService timerService, MarshallerFactory factory, MarshallingConfiguration configuration, ClassLoader classLoader) {
         this.timerService = timerService;
         this.factory = factory;
         this.configuration = configuration;
@@ -101,7 +102,7 @@ public class EjbTimerXmlParser_1_0 implements XMLElementReader<List<TimerImpl>> 
     }
 
     @Override
-    public void readElement(XMLExtendedStreamReader reader, List<TimerImpl> timers) throws XMLStreamException {
+    public void readElement(XMLExtendedStreamReader reader, List<Timer> timers) throws XMLStreamException {
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case END_ELEMENT: {
@@ -124,7 +125,7 @@ public class EjbTimerXmlParser_1_0 implements XMLElementReader<List<TimerImpl>> 
         }
     }
 
-    private void parseTimer(XMLExtendedStreamReader reader, List<TimerImpl> timers) throws XMLStreamException {
+    private void parseTimer(XMLExtendedStreamReader reader, List<Timer> timers) throws XMLStreamException {
         LoadableElements loadableElements = new LoadableElements();
         TimerImpl.Builder builder = TimerImpl.builder();
         builder.setPersistent(true);
@@ -205,7 +206,7 @@ public class EjbTimerXmlParser_1_0 implements XMLElementReader<List<TimerImpl>> 
     }
 
 
-    private void parseCalendarTimer(XMLExtendedStreamReader reader, List<TimerImpl> timers) throws XMLStreamException {
+    private void parseCalendarTimer(XMLExtendedStreamReader reader, List<Timer> timers) throws XMLStreamException {
         LoadableElements loadableElements = new LoadableElements();
         CalendarTimer.Builder builder = CalendarTimer.builder();
         builder.setAutoTimer(false).setPersistent(true);

@@ -43,19 +43,16 @@ public class CalendarTimerTask extends TimerTask<CalendarTimer> {
     }
 
     @Override
-    protected void callTimeout(TimerImpl timer) throws Exception {
-        CalendarTimer calendarTimer = (CalendarTimer) timer;
-
+    protected void callTimeout(Timer timer) throws Exception {
         // if we have any more schedules remaining, then schedule a new task
-        if (calendarTimer.getNextExpiration() != null && !calendarTimer.isInRetry()) {
-            calendarTimer.scheduleTimeout(false);
+        if (timer.getNextExpiration() != null && !timer.isInRetry()) {
+            timer.scheduleTimeout(false);
         }
-        invokeBeanMethod(calendarTimer);
-
-
+        invokeBeanMethod(timer);
     }
 
-    protected void invokeBeanMethod(TimerImpl timer) throws Exception {
+    @Override
+    protected void invokeBeanMethod(Timer timer) throws Exception {
         CalendarTimer calendarTimer = (CalendarTimer) timer;
         // finally invoke the timeout method through the invoker
         if (calendarTimer.isAutoTimer()) {
@@ -68,7 +65,7 @@ public class CalendarTimerTask extends TimerTask<CalendarTimer> {
     }
 
     @Override
-    protected Date calculateNextTimeout(TimerImpl timer) {
+    protected Date calculateNextTimeout(Timer timer) {
         // The next timeout for the calendar timer will have to be computed using the
         // current "nextExpiration"
         Date currentTimeout = timer.getNextExpiration();
@@ -86,14 +83,14 @@ public class CalendarTimerTask extends TimerTask<CalendarTimer> {
     }
 
     @Override
-    protected void scheduleTimeoutIfRequired(TimerImpl timer) {
+    protected void scheduleTimeoutIfRequired(Timer timer) {
         if (timer.getNextExpiration() != null) {
             timer.scheduleTimeout(false);
         }
     }
 
     @Override
-    protected void postTimeoutProcessing(TimerImpl timer) {
+    protected void postTimeoutProcessing(Timer timer) {
         timer.lock();
         try {
             final CalendarTimer calendarTimer = (CalendarTimer) timer;

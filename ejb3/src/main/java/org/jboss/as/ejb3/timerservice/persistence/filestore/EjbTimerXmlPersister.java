@@ -25,11 +25,12 @@ package org.jboss.as.ejb3.timerservice.persistence.filestore;
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.List;
+
+import javax.ejb.ScheduleExpression;
 import javax.xml.stream.XMLStreamException;
 
 import org.jboss.as.ejb3.logging.EjbLogger;
-import org.jboss.as.ejb3.timerservice.CalendarTimer;
-import org.jboss.as.ejb3.timerservice.TimerImpl;
+import org.jboss.as.ejb3.timerservice.Timer;
 import org.jboss.marshalling.Marshaller;
 import org.jboss.marshalling.MarshallerFactory;
 import org.jboss.marshalling.MarshallingConfiguration;
@@ -40,7 +41,7 @@ import org.jboss.staxmapper.XMLExtendedStreamWriter;
 /**
  * @author Stuart Douglas
  */
-public class EjbTimerXmlPersister implements XMLElementWriter<List<TimerImpl>> {
+public class EjbTimerXmlPersister implements XMLElementWriter<List<Timer>> {
 
     static final String TIMERS = "timers";
     static final String TIMER = "timer";
@@ -79,14 +80,14 @@ public class EjbTimerXmlPersister implements XMLElementWriter<List<TimerImpl>> {
     }
 
     @Override
-    public void writeContent(XMLExtendedStreamWriter writer, List<TimerImpl> timers) throws XMLStreamException {
+    public void writeContent(XMLExtendedStreamWriter writer, List<Timer> timers) throws XMLStreamException {
 
         writer.writeStartDocument();
         writer.writeStartElement(TIMERS);
         writer.writeDefaultNamespace(EjbTimerXmlParser_1_0.NAMESPACE);
-        for (TimerImpl timer : timers) {
-            if (timer instanceof CalendarTimer) {
-                writeCalendarTimer(writer, (CalendarTimer) timer);
+        for (Timer timer : timers) {
+            if (timer.getCalendarTimeout() != null) {
+                writeCalendarTimer(writer, timer);
             } else {
                 writeTimer(writer, timer);
             }
@@ -96,15 +97,15 @@ public class EjbTimerXmlPersister implements XMLElementWriter<List<TimerImpl>> {
     }
 
 
-    private void writeCalendarTimer(XMLExtendedStreamWriter writer, CalendarTimer timer) throws XMLStreamException {
+    private void writeCalendarTimer(XMLExtendedStreamWriter writer, Timer timer) throws XMLStreamException {
         String info = null;
         String primaryKey = null;
-        if (timer.getInfo() != null) {
+        if (timer.getTimerInfo() != null) {
             try {
                 Marshaller marshaller = factory.createMarshaller(configuration);
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 marshaller.start(new OutputStreamByteOutput(out));
-                marshaller.writeObject(timer.getInfo());
+                marshaller.writeObject(timer.getTimerInfo());
                 marshaller.finish();
                 marshaller.flush();
                 info = Base64.getEncoder().encodeToString(out.toByteArray());
@@ -138,21 +139,22 @@ public class EjbTimerXmlPersister implements XMLElementWriter<List<TimerImpl>> {
         }
         writer.writeAttribute(TIMER_STATE, timer.getState().name());
 
-        writer.writeAttribute(SCHEDULE_EXPR_SECOND, timer.getScheduleExpression().getSecond());
-        writer.writeAttribute(SCHEDULE_EXPR_MINUTE, timer.getScheduleExpression().getMinute());
-        writer.writeAttribute(SCHEDULE_EXPR_HOUR, timer.getScheduleExpression().getHour());
-        writer.writeAttribute(SCHEDULE_EXPR_DAY_OF_WEEK, timer.getScheduleExpression().getDayOfWeek());
-        writer.writeAttribute(SCHEDULE_EXPR_DAY_OF_MONTH, timer.getScheduleExpression().getDayOfMonth());
-        writer.writeAttribute(SCHEDULE_EXPR_MONTH, timer.getScheduleExpression().getMonth());
-        writer.writeAttribute(SCHEDULE_EXPR_YEAR, timer.getScheduleExpression().getYear());
-        if (timer.getScheduleExpression().getStart() != null) {
-            writer.writeAttribute(SCHEDULE_EXPR_START_DATE, Long.toString(timer.getScheduleExpression().getStart().getTime()));
+        ScheduleExpression schedule = timer.getCalendarTimeout().getScheduleExpression();
+        writer.writeAttribute(SCHEDULE_EXPR_SECOND, schedule.getSecond());
+        writer.writeAttribute(SCHEDULE_EXPR_MINUTE, schedule.getMinute());
+        writer.writeAttribute(SCHEDULE_EXPR_HOUR, schedule.getHour());
+        writer.writeAttribute(SCHEDULE_EXPR_DAY_OF_WEEK, schedule.getDayOfWeek());
+        writer.writeAttribute(SCHEDULE_EXPR_DAY_OF_MONTH, schedule.getDayOfMonth());
+        writer.writeAttribute(SCHEDULE_EXPR_MONTH, schedule.getMonth());
+        writer.writeAttribute(SCHEDULE_EXPR_YEAR, schedule.getYear());
+        if (schedule.getStart() != null) {
+            writer.writeAttribute(SCHEDULE_EXPR_START_DATE, Long.toString(schedule.getStart().getTime()));
         }
-        if (timer.getScheduleExpression().getEnd() != null) {
-            writer.writeAttribute(SCHEDULE_EXPR_END_DATE, Long.toString(timer.getScheduleExpression().getEnd().getTime()));
+        if (schedule.getEnd() != null) {
+            writer.writeAttribute(SCHEDULE_EXPR_END_DATE, Long.toString(schedule.getEnd().getTime()));
         }
-        if (timer.getScheduleExpression().getTimezone() != null) {
-            writer.writeAttribute(SCHEDULE_EXPR_TIMEZONE, timer.getScheduleExpression().getTimezone());
+        if (schedule.getTimezone() != null) {
+            writer.writeAttribute(SCHEDULE_EXPR_TIMEZONE, schedule.getTimezone());
         }
 
         if (info != null) {
@@ -179,15 +181,15 @@ public class EjbTimerXmlPersister implements XMLElementWriter<List<TimerImpl>> {
         writer.writeEndElement();
     }
 
-    private void writeTimer(XMLExtendedStreamWriter writer, TimerImpl timer) throws XMLStreamException {
+    private void writeTimer(XMLExtendedStreamWriter writer, Timer timer) throws XMLStreamException {
         String info = null;
         String primaryKey = null;
-        if (timer.getInfo() != null) {
+        if (timer.getTimerInfo() != null) {
             try {
                 Marshaller marshaller = factory.createMarshaller(configuration);
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 marshaller.start(new OutputStreamByteOutput(out));
-                marshaller.writeObject(timer.getInfo());
+                marshaller.writeObject(timer.getTimerInfo());
                 marshaller.finish();
                 marshaller.flush();
                 info = Base64.getEncoder().encodeToString(out.toByteArray());

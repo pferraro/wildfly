@@ -26,8 +26,8 @@ import java.util.List;
 
 import javax.transaction.TransactionManager;
 
-import org.jboss.as.ejb3.timerservice.TimerImpl;
-import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
+import org.jboss.as.ejb3.timerservice.Timer;
+import org.jboss.as.ejb3.timerservice.TimerService;
 import org.jboss.msc.service.ServiceName;
 
 /**
@@ -42,14 +42,14 @@ public interface TimerPersistence {
      *
      * @param timer The timer
      */
-    void addTimer(TimerImpl timer);
+    void addTimer(Timer descriptor);
 
     /**
      * Called when a timer is being persisted
      *
      * @param timer The timer
      */
-    void persistTimer(TimerImpl timer);
+    void persistTimer(Timer descriptor);
 
     /**
      * Invoked before running a timer in order to determine if this node should run the timer.
@@ -57,7 +57,7 @@ public interface TimerPersistence {
      * @param txManager Transaction manager to be able to create a transaction
      * @return true if the timer should be run
      */
-    boolean shouldRun(TimerImpl timer, TransactionManager txManager);
+    boolean shouldRun(Timer descriptor, TransactionManager txManager);
 
     /**
      * Signals that a timer is being undeployed, and all cached data relating to this object should
@@ -73,7 +73,7 @@ public interface TimerPersistence {
      * @param timedObjectId The timed object id to load timers for
      * @return A list of all active timers
      */
-    List<TimerImpl> loadActiveTimers(String timedObjectId, final TimerServiceImpl timerService);
+    List<Timer> loadActiveTimers(String timedObjectId, final TimerService timerService);
 
     /**
      *
@@ -94,7 +94,7 @@ public interface TimerPersistence {
          * Invoked when a timer is added to the underlying store.
          * @param timer The timer
          */
-        void timerAdded(TimerImpl timer);
+        void timerAdded(Timer timer);
 
         /**
          * Invoked when a timer is removed from the underlying store
@@ -107,8 +107,7 @@ public interface TimerPersistence {
          *
          * @return The timer service
          */
-        TimerServiceImpl getTimerService();
-
+        TimerService getTimerService();
     }
 
 }

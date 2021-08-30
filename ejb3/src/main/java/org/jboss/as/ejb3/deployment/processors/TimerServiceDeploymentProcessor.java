@@ -36,12 +36,15 @@ import org.jboss.as.ee.component.DependencyConfigurator;
 import org.jboss.as.ee.component.EEModuleDescription;
 import org.jboss.as.ejb3.logging.EjbLogger;
 import org.jboss.as.ejb3.component.EJBComponent;
+import org.jboss.as.ejb3.component.EJBComponentCreateService;
 import org.jboss.as.ejb3.component.EJBComponentDescription;
 import org.jboss.as.ejb3.component.TimerServiceRegistry;
 import org.jboss.as.ejb3.component.stateful.StatefulComponentDescription;
 import org.jboss.as.ejb3.deployment.EjbDeploymentAttachmentKeys;
+import org.jboss.as.ejb3.timerservice.TimerManagerRegistry;
 import org.jboss.as.ejb3.timerservice.NonFunctionalTimerService;
 import org.jboss.as.ejb3.timerservice.TimedObjectInvokerImpl;
+import org.jboss.as.ejb3.timerservice.TimerFactory;
 import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
 import org.jboss.as.ejb3.timerservice.TimerServiceMetaData;
 import org.jboss.as.ejb3.timerservice.persistence.TimerPersistence;
@@ -88,7 +91,7 @@ public class TimerServiceDeploymentProcessor implements DeploymentUnitProcessor 
         final Map<String, ServiceName> timerPersistenceServices = new HashMap<String, ServiceName>();
         // if this is an EJB deployment then create an EJB module level TimerServiceRegistry which can be used by the timer services
         // of all EJB components that belong to this EJB module.
-        final TimerServiceRegistry timerServiceRegistry = EjbDeploymentMarker.isEjbDeployment(deploymentUnit) ? new TimerServiceRegistry() : null;
+        final TimerManagerRegistry timerServiceRegistry = EjbDeploymentMarker.isEjbDeployment(deploymentUnit) ? new TimerServiceRegistry() : null;
 
         if (ejbJarMetaData != null && ejbJarMetaData.getAssemblyDescriptor() != null) {
             List<TimerServiceMetaData> timerService = ejbJarMetaData.getAssemblyDescriptor().getAny(TimerServiceMetaData.class);
@@ -132,18 +135,23 @@ public class TimerServiceDeploymentProcessor implements DeploymentUnitProcessor 
                             //install the timer create service
                             final ServiceName serviceName = componentDescription.getServiceName().append(TimerServiceImpl.SERVICE_NAME);
                             final TimerServiceImpl service = new TimerServiceImpl(ejbComponentDescription.getScheduleMethods(), serviceName, timerServiceRegistry);
-                            final ServiceBuilder<javax.ejb.TimerService> createBuilder = context.getServiceTarget().addService(serviceName, service);
-                            createBuilder.addDependency(TIMER_SERVICE_NAME, Timer.class, service.getTimerInjectedValue());
-                            createBuilder.addDependency(componentDescription.getCreateServiceName(), EJBComponent.class, service.getEjbComponentInjectedValue());
-                            createBuilder.addDependency(timerServiceThreadPool, ExecutorService.class, service.getExecutorServiceInjectedValue());
+                            final ServiceBuilder<TimerServiceImpl> createBuilder = context.getServiceTarget().addService(serviceName, service);
+                            createBuilder.addDependency(TIMER_SERVICE_NAME, Timer.class, service.getTimerInjector());
+                            createBuilder.addDependency(componentDescription.getCreateServiceName(), EJBComponent.class, service.getEJBComponentInjector());
+                            createBuilder.addDependency(timerServiceThreadPool, ExecutorService.class, service.getExecutorServiceInjector());
                             if (timerPersistenceServices.containsKey(ejbComponentDescription.getEJBName())) {
-                                createBuilder.addDependency(timerPersistenceServices.get(ejbComponentDescription.getEJBName()), TimerPersistence.class, service.getTimerPersistence());
+                                createBuilder.addDependency(timerPersistenceServices.get(ejbComponentDescription.getEJBName()), TimerPersistence.class, service.getTimerPersistenceInjector());
                             } else {
-                                createBuilder.addDependency(finalDefaultTimerPersistenceService, TimerPersistence.class, service.getTimerPersistence());
+                                createBuilder.addDependency(finalDefaultTimerPersistenceService, TimerPersistence.class, service.getTimerPersistenceInjector());
                             }
                             createBuilder.addDependency(invokerServiceName, TimedObjectInvoker.class, service.getTimedObjectInvoker());
                             createBuilder.install();
-                            ejbComponentDescription.setTimerService(service);
+                            configuration.getCreateDependencies().add(new DependencyConfigurator<EJBComponentCreateService>() {
+                                @Override
+                                public void configureDependency(ServiceBuilder<?> serviceBuilder, EJBComponentCreateService service) throws DeploymentUnitProcessingException {
+                                    serviceBuilder.addDependency(serviceName, TimerFactory.class, service.getTimerServiceInjector());
+                                }
+                            });
                             //inject the timer service directly into the start service
                             configuration.getStartDependencies().add(new DependencyConfigurator<ComponentStartService>() {
                                 @Override
@@ -171,7 +179,12 @@ public class TimerServiceDeploymentProcessor implements DeploymentUnitProcessor 
                             // add the non-functional timer service as a MSC service
                             context.getServiceTarget().addService(nonFunctionalTimerServiceName, nonFunctionalTimerService).install();
                             // set the timer service in the EJB component
-                            ejbComponentDescription.setTimerService(nonFunctionalTimerService);
+                            configuration.getCreateDependencies().add(new DependencyConfigurator<EJBComponentCreateService>() {
+                                @Override
+                                public void configureDependency(ServiceBuilder<?> serviceBuilder, EJBComponentCreateService service) throws DeploymentUnitProcessingException {
+                                    serviceBuilder.addDependency(nonFunctionalTimerServiceName, TimerFactory.class, service.getTimerServiceInjector());
+                                }
+                            });
                             // now we want the EJB component to depend on this non-functional timer service to start
                             configuration.getStartDependencies().add(new DependencyConfigurator<ComponentStartService>() {
                                 @Override

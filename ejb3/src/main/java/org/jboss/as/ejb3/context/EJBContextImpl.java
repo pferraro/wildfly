@@ -33,6 +33,7 @@ import javax.ejb.TimerService;
 import javax.transaction.UserTransaction;
 
 import org.jboss.as.ejb3.logging.EjbLogger;
+import org.jboss.as.ejb3.timerservice.EJBTimerService;
 import org.jboss.as.ejb3.component.EJBComponent;
 import org.jboss.as.ejb3.component.EjbComponentInstance;
 import org.jboss.as.ejb3.component.allowedmethods.AllowedMethodsInformation;
@@ -96,7 +97,7 @@ public abstract class EJBContextImpl implements javax.ejb.EJBContext, Serializab
 
     public TimerService getTimerService() throws IllegalStateException {
         AllowedMethodsInformation.checkAllowed(MethodType.GET_TIMER_SERVICE);
-        return  instance.getComponent().getTimerService();
+        return new EJBTimerService(instance.getComponent());
     }
 
 

@@ -31,7 +31,6 @@ import java.util.Map;
 
 import javax.ejb.EJBHome;
 import javax.ejb.EJBLocalHome;
-import javax.ejb.TimerService;
 import javax.ejb.TransactionAttributeType;
 import javax.ejb.TransactionManagementType;
 import javax.naming.Context;
@@ -55,6 +54,7 @@ import org.jboss.as.ejb3.context.CurrentInvocationContext;
 import org.jboss.as.ejb3.logging.EjbLogger;
 import org.jboss.as.ejb3.remote.EJBRemoteTransactionsRepository;
 import org.jboss.as.ejb3.security.EJBSecurityMetaData;
+import org.jboss.as.ejb3.timerservice.TimerFactory;
 import org.jboss.as.ejb3.timerservice.TimerServiceImpl;
 import org.jboss.as.ejb3.tx.ApplicationExceptionDetails;
 import org.jboss.as.naming.ManagedReference;
@@ -92,7 +92,7 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
     private final ServiceName ejbObjectViewServiceName;
     private final ServiceName ejbLocalObjectViewServiceName;
 
-    private final TimerService timerService;
+    private final TimerFactory timerService;
     private final Map<Method, InterceptorFactory> timeoutInterceptors;
     private final Method timeoutMethod;
     private final String applicationName;
@@ -336,7 +336,7 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
         return this.serverSecurityManager;
     }
 
-    public TimerService getTimerService() throws IllegalStateException {
+    public TimerFactory getTimerService() {
         return timerService;
     }
 

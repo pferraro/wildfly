@@ -23,7 +23,6 @@ package org.jboss.as.ejb3.component;
 
 
 import javax.ejb.EJBLocalObject;
-import javax.ejb.TimerService;
 import javax.ejb.TransactionAttributeType;
 import javax.ejb.TransactionManagementType;
 import javax.transaction.TransactionManager;
@@ -85,7 +84,6 @@ import org.jboss.as.ejb3.security.EJBMethodSecurityAttribute;
 import org.jboss.as.ejb3.security.EJBSecurityViewConfigurator;
 import org.jboss.as.ejb3.security.SecurityContextInterceptorFactory;
 import org.jboss.as.ejb3.timerservice.AutoTimer;
-import org.jboss.as.ejb3.timerservice.NonFunctionalTimerService;
 import org.jboss.as.security.deployment.SecurityAttachments;
 import org.jboss.as.security.service.SecurityDomainService;
 import org.jboss.as.security.service.SimpleSecurityManagerService;
@@ -192,10 +190,6 @@ public abstract class EJBComponentDescription extends ComponentDescription {
      * The ejb local home view
      */
     private EjbHomeViewDescription ejbHomeView;
-    /**
-     * TODO: this should not be part of the description
-     */
-    private TimerService timerService = NonFunctionalTimerService.DISABLED;
 
     /**
      * If true this component is accessible via CORBA
@@ -881,15 +875,6 @@ public abstract class EJBComponentDescription extends ComponentDescription {
             }
             return "Proxy for view class: " + componentView.getViewClass().getName() + " of EJB: " + name;
         }
-    }
-
-
-    public TimerService getTimerService() {
-        return timerService;
-    }
-
-    public void setTimerService(final TimerService timerService) {
-        this.timerService = timerService;
     }
 
     public EnterpriseBeanMetaData getDescriptorData() {

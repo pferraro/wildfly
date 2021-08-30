@@ -25,7 +25,6 @@ import java.lang.reflect.Method;
 import java.util.Calendar;
 import java.util.Date;
 
-import javax.ejb.EJBException;
 import javax.ejb.ScheduleExpression;
 
 import org.jboss.as.ejb3.logging.EjbLogger;
@@ -66,7 +65,7 @@ public class CalendarTimer extends TimerImpl {
      *                        This <code>timeoutMethod</code> is then considered as the name of the timeout method which has to
      *                        be invoked when this timer times out.
      */
-    public CalendarTimer(Builder builder, TimerServiceImpl timerService) {
+    public CalendarTimer(Builder builder, TimerService timerService) {
         super(builder, timerService);
 
         this.autoTimer = builder.autoTimer;
@@ -100,38 +99,6 @@ public class CalendarTimer extends TimerImpl {
         }
     }
 
-
-    /**
-     * {@inheritDoc}
-     *
-     * @see #getScheduleExpression()
-     */
-    @Override
-    public ScheduleExpression getSchedule() throws IllegalStateException, EJBException {
-        this.assertTimerState();
-        return this.calendarTimeout.getScheduleExpression();
-    }
-
-    /**
-     * This method is similar to {@link #getSchedule()}, except that this method does <i>not</i> check the timer state
-     * and hence does <i>not</i> throw either {@link IllegalStateException} or {@link javax.ejb.NoSuchObjectLocalException}
-     * or {@link javax.ejb.EJBException}.
-     *
-     * @return
-     */
-    public ScheduleExpression getScheduleExpression() {
-        return this.calendarTimeout.getScheduleExpression();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean isCalendarTimer() throws IllegalStateException, EJBException {
-        this.assertTimerState();
-        return true;
-    }
-
     /**
      * Returns the {@link CalendarBasedTimeout} corresponding to this
      * {@link CalendarTimer}
@@ -156,7 +123,7 @@ public class CalendarTimer extends TimerImpl {
      * @see CalendarTimerTask
      */
     @Override
-    protected TimerTask<?> getTimerTask() {
+    public TimerTask<?> createTimerTask() {
         return new CalendarTimerTask(this);
     }
 
@@ -271,7 +238,7 @@ public class CalendarTimer extends TimerImpl {
             return this;
         }
 
-        public CalendarTimer build(final TimerServiceImpl timerService) {
+        public Timer build(final TimerService timerService) {
             return new CalendarTimer(this, timerService);
         }
     }
