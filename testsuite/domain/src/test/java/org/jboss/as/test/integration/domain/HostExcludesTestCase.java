@@ -210,7 +210,11 @@ public class HostExcludesTestCase extends BuildConfigurationTestBase {
                 "org.wildfly.extension.microprofile.lra-participant",
                 "org.wildfly.extension.microprofile.telemetry"
         ), true),
-        WILDFLY_29_0("WildFly29.0", WILDFLY_28_0, true),
+        WILDFLY_29_0("WildFly29.0", WILDFLY_28_0, null, Arrays.asList(
+                "org.jboss.as.jacorb",
+                "org.jboss.as.messaging",
+                "org.jboss.as.web"),
+                true),
         CURRENT(MAJOR, WILDFLY_29_0, getCurrentAddedExtensions(), getCurrentRemovedExtensions(), true);
 
         private static List<String> getCurrentAddedExtensions() {
@@ -232,7 +236,7 @@ public class HostExcludesTestCase extends BuildConfigurationTestBase {
                         );
             }
             */
-            return Arrays.asList("org.jboss.as.jacorb", "org.jboss.as.messaging", "org.jboss.as.web");
+            return Collections.emptyList();
         }
 
         private final String name;
