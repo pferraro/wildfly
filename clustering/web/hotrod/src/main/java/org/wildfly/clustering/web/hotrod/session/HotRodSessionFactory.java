@@ -25,21 +25,25 @@ package org.wildfly.clustering.web.hotrod.session;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import org.infinispan.client.hotrod.Flag;
 import org.infinispan.client.hotrod.RemoteCache;
 import org.infinispan.client.hotrod.annotation.ClientCacheEntryExpired;
 import org.infinispan.client.hotrod.annotation.ClientListener;
 import org.infinispan.client.hotrod.event.ClientCacheEntryExpiredEvent;
+import org.infinispan.client.hotrod.event.ClientEvent;
 import org.wildfly.clustering.Registrar;
 import org.wildfly.clustering.Registration;
 import org.wildfly.clustering.context.DefaultExecutorService;
 import org.wildfly.clustering.context.DefaultThreadFactory;
+import org.wildfly.clustering.ee.Key;
 import org.wildfly.clustering.ee.Remover;
 import org.wildfly.clustering.web.LocalContextFactory;
 import org.wildfly.clustering.web.cache.session.CompositeSessionFactory;
@@ -67,6 +71,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
 @ClientListener
 public class HotRodSessionFactory<MC, AV, LC> extends CompositeSessionFactory<MC, AV, LC> implements Registrar<Consumer<ImmutableSession>> {
 
+    private final RemoteCache<Key<String>, ?> cache;
     private final RemoteCache<SessionCreationMetaDataKey, SessionCreationMetaDataEntry<LC>> creationMetaDataCache;
     private final RemoteCache<SessionAccessMetaDataKey, SessionAccessMetaData> accessMetaDataCache;
     private final ImmutableSessionMetaDataFactory<CompositeSessionMetaDataEntry<LC>> metaDataFactory;
@@ -88,11 +93,32 @@ public class HotRodSessionFactory<MC, AV, LC> extends CompositeSessionFactory<MC
         this.metaDataFactory = metaDataFactory;
         this.attributesFactory = attributesFactory;
         this.attributesRemover = attributesFactory;
+        this.cache = config.getCache();
         this.creationMetaDataCache = config.getCache();
         this.accessMetaDataCache= config.getCache();
         this.executor = Executors.newFixedThreadPool(config.getExpirationThreadPoolSize(), new DefaultThreadFactory(this.getClass()));
         this.creationMetaDataCache.addClientListener(this);
         this.nearCacheEnabled = this.creationMetaDataCache.getRemoteCacheContainer().getConfiguration().remoteCaches().get(this.creationMetaDataCache.getName()).nearCacheMode().enabled();
+        // Detect sessions that may have expired while no listeners were registered
+        try (Stream<Key<String>> stream = this.cache.keySet().stream().filter(SessionCreationMetaDataKey.class::isInstance)) {
+            Iterator<Key<String>> keys = stream.iterator();
+            while (keys.hasNext()) {
+                SessionAccessMetaDataKey key = new SessionAccessMetaDataKey(keys.next().getId());
+                if (!this.accessMetaDataCache.containsKey(key)) {
+                    this.expired(new ClientCacheEntryExpiredEvent<SessionAccessMetaDataKey>() {
+                        @Override
+                        public Type getType() {
+                            return ClientEvent.Type.CLIENT_CACHE_ENTRY_EXPIRED;
+                        }
+
+                        @Override
+                        public SessionAccessMetaDataKey getKey() {
+                            return key;
+                        }
+                    });
+                }
+            }
+        }
     }
 
     @Override
