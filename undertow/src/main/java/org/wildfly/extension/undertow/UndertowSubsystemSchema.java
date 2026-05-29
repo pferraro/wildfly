@@ -6,20 +6,29 @@
 package org.wildfly.extension.undertow;
 
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
-import org.jboss.as.clustering.controller.Attribute;
 import org.jboss.as.controller.AttributeDefinition;
-import org.jboss.as.controller.PersistentResourceXMLDescription;
-import org.jboss.as.controller.PersistentSubsystemSchema;
+import org.jboss.as.controller.PathAddress;
+import org.jboss.as.controller.ResourceRegistration;
 import org.jboss.as.controller.SubsystemSchema;
-import org.jboss.as.controller.operations.common.Util;
+import org.jboss.as.controller.persistence.xml.NamedResourceRegistrationXMLElement;
+import org.jboss.as.controller.persistence.xml.ResourceRegistrationXMLElement;
+import org.jboss.as.controller.persistence.xml.ResourceXMLElementLocalName;
+import org.jboss.as.controller.persistence.xml.ResourceXMLParticleFactory;
+import org.jboss.as.controller.persistence.xml.ResourceXMLSequence;
+import org.jboss.as.controller.persistence.xml.SingletonResourceRegistrationXMLElement;
+import org.jboss.as.controller.persistence.xml.SubsystemResourceRegistrationXMLElement;
+import org.jboss.as.controller.persistence.xml.SubsystemResourceXMLSchema;
 import org.jboss.as.controller.xml.VersionedNamespace;
+import org.jboss.as.controller.xml.XMLCardinality;
+import org.jboss.as.controller.xml.XMLContent;
 import org.jboss.as.version.Stability;
+import org.jboss.dmr.ModelNode;
 import org.jboss.staxmapper.IntVersion;
 import org.wildfly.extension.undertow.filters.CustomFilterDefinition;
 import org.wildfly.extension.undertow.filters.ErrorPageDefinition;
@@ -43,7 +52,7 @@ import org.wildfly.extension.undertow.handlers.ReverseProxyHandlerHostDefinition
  * Enumerates the supported Undertow subsystem schemas.
  * @author Paul Ferraro
  */
-public enum UndertowSubsystemSchema implements PersistentSubsystemSchema<UndertowSubsystemSchema> {
+public enum UndertowSubsystemSchema implements SubsystemResourceXMLSchema<UndertowSubsystemSchema> {
 /*  Unsupported, for documentation purposes only
     VERSION_1_0(1, 0),  // WildFly 8.0
     VERSION_1_1(1, 1),  // WildFly 8.1
@@ -70,7 +79,7 @@ public enum UndertowSubsystemSchema implements PersistentSubsystemSchema<Underto
 
     static final Set<UndertowSubsystemSchema> CURRENT = EnumSet.of(VERSION_15_0);
     private final VersionedNamespace<IntVersion, UndertowSubsystemSchema> namespace;
-    private final PersistentResourceXMLDescription.Factory factory = PersistentResourceXMLDescription.factory(this);
+    private final ResourceXMLParticleFactory factory = ResourceXMLParticleFactory.newInstance(this);
 
     UndertowSubsystemSchema(int major) {
         this(new IntVersion(major));
@@ -98,229 +107,386 @@ public enum UndertowSubsystemSchema implements PersistentSubsystemSchema<Underto
     }
 
     @Override
-    public PersistentResourceXMLDescription getXMLDescription() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(UndertowRootDefinition.PATH_ELEMENT);
+    public SubsystemResourceRegistrationXMLElement getSubsystemXMLElement() {
+        SubsystemResourceRegistrationXMLElement.Builder builder = this.factory.subsystemElement(UndertowRootDefinition.REGISTRATION)
+                .addAttributes(List.of(
+                        UndertowRootDefinition.DEFAULT_VIRTUAL_HOST,
+                        UndertowRootDefinition.DEFAULT_SERVLET_CONTAINER,
+                        UndertowRootDefinition.DEFAULT_SERVER,
+                        UndertowRootDefinition.INSTANCE_ID,
+                        UndertowRootDefinition.STATISTICS_ENABLED,
+                        UndertowRootDefinition.DEFAULT_SECURITY_DOMAIN));
+        if (this.since(VERSION_12_0)) {
+            builder.addAttribute(UndertowRootDefinition.OBFUSCATE_SESSION_ROUTE);
+        }
+
+        ResourceXMLSequence.Builder contentBuilder = this.factory.sequence();
+        if (this.since(VERSION_6_0)) {
+            contentBuilder.addElement(this.factory.namedElement(ByteBufferPoolDefinition.REGISTRATION)
+                    .addAttributes(ByteBufferPoolDefinition.ATTRIBUTES)
+                    .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                    .build());
+        }
+        contentBuilder.addElement(this.factory.namedElement(BufferCacheDefinition.REGISTRATION)
+                .addAttributes(BufferCacheDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                .build());
+        contentBuilder.addElement(this.factory.namedElement(ServerDefinition.REGISTRATION)
+                .addAttributes(ServerDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Unbounded.REQUIRED)
+                .withContent(this.factory.sequence()
+                        .addElement(this.ajpListener())
+                        .addElement(this.httpListener())
+                        .addElement(this.httpsListener())
+                        .addElement(this.host())
+                        .build())
+                .build());
+        contentBuilder.addElement(this.servletContainer());
+        contentBuilder.addElement(this.factory.singletonElement(HandlerDefinitions.REGISTRATION)
+                .implyIfAbsent()
+                .withElementLocalName(Constants.HANDLERS)
+                .withContent(this.factory.sequence()
+                        .addElement(this.factory.namedElement(FileHandlerDefinition.REGISTRATION)
+                                .addAttributes(FileHandlerDefinition.ATTRIBUTES)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .build())
+                        .addElement(this.reverseProxy())
+                        .build())
+                .build());
+        contentBuilder.addElement(this.factory.singletonElement(FilterDefinitions.REGISTRATION)
+                .implyIfAbsent()
+                .withElementLocalName(Constants.FILTERS)
+                .withContent(this.factory.sequence()
+                        .addElement(this.factory.namedElement(RequestLimitHandlerDefinition.REGISTRATION)
+                                .addAttributes(RequestLimitHandlerDefinition.ATTRIBUTES)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .build())
+                        .addElement(this.factory.namedElement(ResponseHeaderFilterDefinition.REGISTRATION)
+                                .addAttributes(ResponseHeaderFilterDefinition.ATTRIBUTES)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .build())
+                        .addElement(this.factory.namedElement(GzipFilterDefinition.REGISTRATION)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .build())
+                        .addElement(this.factory.namedElement(ErrorPageDefinition.REGISTRATION)
+                                .addAttributes(ErrorPageDefinition.ATTRIBUTES)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .build())
+                        .addElement(this.modCluster())
+                        .addElement(this.factory.namedElement(CustomFilterDefinition.REGISTRATION)
+                                .withElementLocalName(Constants.FILTER)
+                                .addAttributes(CustomFilterDefinition.ATTRIBUTES)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .withContent(this.factory.sequence()
+                                        .addElement(CustomFilterDefinition.PARAMETERS)
+                                        .build())
+                                .build())
+                        .addElement(this.factory.namedElement(ExpressionFilterDefinition.REGISTRATION)
+                                .addAttributes(ExpressionFilterDefinition.ATTRIBUTES)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .build())
+                        .addElement(this.factory.namedElement(RewriteFilterDefinition.REGISTRATION)
+                                .addAttributes(RewriteFilterDefinition.ATTRIBUTES)
+                                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                                .build())
+                        .build())
+                .build());
+        if (this.since(VERSION_4_0)) {
+            contentBuilder.addElement(this.factory.element(this.factory.resolve(Constants.APPLICATION_SECURITY_DOMAINS)).withCardinality(XMLCardinality.Single.OPTIONAL).withContent(this.factory.sequence().addElement(this.applicationSecurityDomain()).build()).build());
+        }
+        return builder.withContent(contentBuilder.build()).build();
+    }
+
+    private ResourceRegistrationXMLElement ajpListener() {
+        // Reproduce attribute order of the previous parser implementation
+        Set<AttributeDefinition> attributes = new LinkedHashSet<>(AjpListenerResourceDefinition.ATTRIBUTES);
+        if (!this.since(VERSION_15_0) && !this.since(VERSION_14_0_COMMUNITY)) {
+            attributes.remove(AjpListenerResourceDefinition.ALLOWED_REQUEST_ATTRIBUTES_PATTERN);
+        }
+        return this.listener(AjpListenerResourceDefinition.REGISTRATION).addAttributes(attributes).build();
+    }
+
+    private ResourceRegistrationXMLElement httpListener() {
+        // Reproduce attribute order of the previous parser implementation
+        Set<AttributeDefinition> attributes = new LinkedHashSet<>(HttpListenerResourceDefinition.ATTRIBUTES);
+        attributes.addAll(AbstractHttpListenerResourceDefinition.ATTRIBUTES);
+        return this.httpListener(HttpListenerResourceDefinition.REGISTRATION, attributes).build();
+    }
+
+    private ResourceRegistrationXMLElement httpsListener() {
+        // Reproduce attribute order of the previous parser implementation
+        Set<AttributeDefinition> attributes = new LinkedHashSet<>(HttpsListenerResourceDefinition.ATTRIBUTES);
+        attributes.addAll(AbstractHttpListenerResourceDefinition.ATTRIBUTES);
+        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
+            attributes.remove(HttpsListenerResourceDefinition.SSL_CONTEXT);
+        }
+        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
+            attributes.removeAll(List.of(AbstractHttpListenerResourceDefinition.CERTIFICATE_FORWARDING, AbstractHttpListenerResourceDefinition.PROXY_ADDRESS_FORWARDING));
+        }
+        return this.httpListener(HttpsListenerResourceDefinition.REGISTRATION, attributes).build();
+    }
+
+    private NamedResourceRegistrationXMLElement.Builder httpListener(ResourceRegistration registration, Set<AttributeDefinition> attributes) {
+        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
+            attributes.remove(AbstractHttpListenerResourceDefinition.REQUIRE_HOST_HTTP11);
+        }
+        if (!this.since(UndertowSubsystemSchema.VERSION_6_0)) {
+            attributes.remove(AbstractHttpListenerResourceDefinition.PROXY_PROTOCOL);
+        }
+        return this.listener(registration).addAttributes(attributes);
+    }
+
+    private NamedResourceRegistrationXMLElement.Builder listener(ResourceRegistration registration) {
+        // Reproduce attribute order of the previous parser implementation
+        Set<AttributeDefinition> attributes = new LinkedHashSet<>(ListenerResourceDefinition.ATTRIBUTES);
+        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
+            attributes.remove(ListenerResourceDefinition.RFC6265_COOKIE_VALIDATION);
+        }
+        if (!this.since(UndertowSubsystemSchema.VERSION_6_0)) {
+            attributes.remove(ListenerResourceDefinition.ALLOW_UNESCAPED_CHARACTERS_IN_URL);
+        }
+        return this.factory.namedElement(registration)
+                .addAttributes(attributes)
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL);
+    }
+
+    private ResourceRegistrationXMLElement host() {
+        NamedResourceRegistrationXMLElement.Builder builder = this.factory.namedElement(HostDefinition.REGISTRATION)
+                .addAttributes(List.of(HostDefinition.ALIAS, HostDefinition.DEFAULT_WEB_MODULE, HostDefinition.DEFAULT_RESPONSE_CODE, HostDefinition.DISABLE_CONSOLE_REDIRECT))
+                .withCardinality(XMLCardinality.Unbounded.REQUIRED)
+                ;
 
         if (this.since(UndertowSubsystemSchema.VERSION_6_0)) {
-            builder.addChild(this.factory.builder(ByteBufferPoolDefinition.PATH_ELEMENT).addAttributes(ByteBufferPoolDefinition.ATTRIBUTES.stream()).build());
+            builder.addAttribute(HostDefinition.QUEUE_REQUESTS_ON_START);
         }
-        builder.addChild(this.factory.builder(BufferCacheDefinition.PATH_ELEMENT).addAttributes(BufferCacheDefinition.ATTRIBUTES.stream()).build());
-        builder.addChild(this.factory.builder(ServerDefinition.PATH_ELEMENT).addAttributes(ServerDefinition.ATTRIBUTES.stream())
-            .addChild(this.ajpListener())
-            .addChild(this.httpListener())
-            .addChild(this.httpsListener())
-            .addChild(this.host())
-            .build()
-        );
-        builder.addChild(this.servletContainer());
-        builder.addChild(this.handlers());
-        builder.addChild(this.factory.builder(FilterDefinitions.PATH_ELEMENT).setXmlElementName(Constants.FILTERS).setNoAddOperation(true)
-            .addChild(this.factory.builder(RequestLimitHandlerDefinition.PATH_ELEMENT).addAttributes(RequestLimitHandlerDefinition.ATTRIBUTES.stream()).build())
-            .addChild(this.factory.builder(ResponseHeaderFilterDefinition.PATH_ELEMENT).addAttributes(ResponseHeaderFilterDefinition.ATTRIBUTES.stream()).build())
-            .addChild(this.factory.builder(GzipFilterDefinition.PATH_ELEMENT).build())
-            .addChild(this.factory.builder(ErrorPageDefinition.PATH_ELEMENT).addAttributes(ErrorPageDefinition.ATTRIBUTES.stream()).build())
-            .addChild(this.modCluster())
-            .addChild(this.factory.builder(CustomFilterDefinition.PATH_ELEMENT).addAttributes(CustomFilterDefinition.ATTRIBUTES.stream()).setXmlElementName("filter").build())
-            .addChild(this.factory.builder(ExpressionFilterDefinition.PATH_ELEMENT).addAttributes(ExpressionFilterDefinition.ATTRIBUTES.stream()).build())
-            .addChild(this.factory.builder(RewriteFilterDefinition.PATH_ELEMENT).addAttributes(RewriteFilterDefinition.ATTRIBUTES.stream()).build())
-            .build()
-        );
-        if (this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            builder.addChild(this.applicationSecurityDomain());
-        }
-        //here to make sure we always add filters & handlers path to mgmt model
-        builder.setAdditionalOperationsGenerator((address, addOperation, operations) -> {
-            operations.add(Util.createAddOperation(address.append(FilterDefinitions.PATH_ELEMENT)));
-            operations.add(Util.createAddOperation(address.append(HandlerDefinitions.PATH_ELEMENT)));
-        });
 
-        Stream<AttributeDefinition> attributes = UndertowRootDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_12_0)) {
-            attributes = attributes.filter(Predicate.isEqual(UndertowRootDefinition.OBFUSCATE_SESSION_ROUTE).negate());
+        NamedResourceRegistrationXMLElement filterRefElement = this.factory.namedElement(FilterRefDefinition.REGISTRATION)
+                .addAttributes(FilterRefDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                .build();
+
+        ResourceXMLSequence.Builder contentBuilder = this.factory.sequence();
+        contentBuilder.addElement(this.factory.namedElement(LocationDefinition.REGISTRATION)
+                .addAttributes(LocationDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                .withContent(this.factory.sequence()
+                        .addElement(filterRefElement)
+                        .build())
+                .build());
+        contentBuilder.addElement(this.factory.singletonElement(AccessLogDefinition.REGISTRATION)
+                .addAttributes(AccessLogDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .build());
+        if (this.since(VERSION_9_0)) {
+            contentBuilder.addElement(this.factory.singletonElement(ConsoleAccessLogDefinition.REGISTRATION)
+                    .addAttributes(ConsoleAccessLogDefinition.ATTRIBUTES)
+                    .withCardinality(XMLCardinality.Single.OPTIONAL)
+                    .withContent(this.factory.sequence()
+                            .addElement(ExchangeAttributeDefinitions.ATTRIBUTES)
+                            .addElement(ConsoleAccessLogDefinition.METADATA)
+                            .build())
+                    .build());
         }
-        attributes.forEach(builder::addAttribute);
+        contentBuilder.addElement(filterRefElement);
+        contentBuilder.addElement(this.singleSignOn(List.of(), XMLContent.empty()));
+        if (this.since(VERSION_4_0)) {
+            contentBuilder.addElement(this.factory.singletonElement(HttpInvokerDefinition.REGISTRATION)
+                    .addAttributes(HttpInvokerDefinition.ATTRIBUTES)
+                    .withCardinality(XMLCardinality.Single.OPTIONAL)
+                    .build());
+        }
+        return builder.withContent(contentBuilder.build()).build();
+    }
+
+    private ResourceRegistrationXMLElement singleSignOn(Iterable<? extends Supplier<AttributeDefinition>> attributeProviders, XMLContent<Map.Entry<PathAddress, Map<PathAddress, ModelNode>>, ModelNode> content) {
+        return this.factory.singletonElement(SingleSignOnDefinition.REGISTRATION)
+                .provideAttributes(attributeProviders)
+                .provideAttributes(EnumSet.allOf(SingleSignOnDefinition.Attribute.class))
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .withContent(content)
+                .build();
+    }
+
+    private ResourceRegistrationXMLElement servletContainer() {
+        NamedResourceRegistrationXMLElement.Builder builder = this.factory.namedElement(ServletContainerDefinition.REGISTRATION)
+                .addAttributes(List.of(
+                        ServletContainerDefinition.ALLOW_NON_STANDARD_WRAPPERS,
+                        ServletContainerDefinition.DEFAULT_BUFFER_CACHE,
+                        ServletContainerDefinition.STACK_TRACE_ON_ERROR,
+                        ServletContainerDefinition.DEFAULT_ENCODING,
+                        ServletContainerDefinition.USE_LISTENER_ENCODING,
+                        ServletContainerDefinition.IGNORE_FLUSH,
+                        ServletContainerDefinition.EAGER_FILTER_INIT,
+                        ServletContainerDefinition.DEFAULT_SESSION_TIMEOUT,
+                        ServletContainerDefinition.DISABLE_CACHING_FOR_SECURED_PAGES,
+                        ServletContainerDefinition.DIRECTORY_LISTING,
+                        ServletContainerDefinition.PROACTIVE_AUTHENTICATION,
+                        ServletContainerDefinition.SESSION_ID_LENGTH,
+                        ServletContainerDefinition.MAX_SESSIONS))
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL);
+
+        if (this.since(VERSION_4_0)) {
+            builder.addAttributes(List.of(ServletContainerDefinition.DISABLE_FILE_WATCH_SERVICE, ServletContainerDefinition.DISABLE_SESSION_ID_REUSE));
+        }
+        if (this.since(VERSION_5_0)) {
+            builder.addAttributes(List.of(ServletContainerDefinition.FILE_CACHE_METADATA_SIZE, ServletContainerDefinition.FILE_CACHE_MAX_FILE_SIZE, ServletContainerDefinition.FILE_CACHE_TIME_TO_LIVE));
+        }
+        if (this.since(VERSION_6_0)) {
+            builder.addAttribute(ServletContainerDefinition.DEFAULT_COOKIE_VERSION);
+        }
+        if (this.since(VERSION_10_0)) {
+            builder.addAttribute(ServletContainerDefinition.PRESERVE_PATH_ON_FORWARD);
+        }
+        if (this.since(VERSION_14_0)) {
+            builder.addAttribute(ServletContainerDefinition.ORPHAN_SESSION_ALLOWED);
+        }
+
+        ResourceXMLSequence.Builder contentBuilder = this.factory.sequence();
+        contentBuilder.addElement(this.factory.singletonElement(JspDefinition.REGISTRATION)
+                .withElementLocalName(Constants.JSP_CONFIG)
+                .addAttributes(JspDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .build());
+        if (this.since(VERSION_14_0)) {
+            contentBuilder.addElement(this.factory.singletonElement(AffinityCookieDefinition.REGISTRATION)
+                    .addAttributes(AffinityCookieDefinition.ATTRIBUTES)
+                    .withCardinality(XMLCardinality.Single.OPTIONAL)
+                    .build());
+        }
+        contentBuilder.addElement(this.factory.singletonElement(SessionCookieDefinition.REGISTRATION)
+                .addAttributes(SessionCookieDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .build());
+        contentBuilder.addElement(this.factory.singletonElement(PersistentSessionsDefinition.REGISTRATION)
+                .addAttributes(PersistentSessionsDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .build());
+        contentBuilder.addElement(this.websockets());
+        contentBuilder.addElement(this.factory.element(this.resolve("mime-mappings"))
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .withContent(this.factory.sequence()
+                        .addElement(this.factory.namedElement(MimeMappingDefinition.REGISTRATION).addAttribute(MimeMappingDefinition.VALUE).build())
+                        .build())
+                .build());
+        contentBuilder.addElement(this.factory.element(this.resolve("welcome-files"))
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .withContent(this.factory.sequence()
+                        .addElement(this.factory.namedElement(WelcomeFileDefinition.REGISTRATION).build())
+                        .build())
+                .build());
+        contentBuilder.addElement(this.factory.singletonElement(CrawlerSessionManagementDefinition.REGISTRATION)
+                .addAttributes(CrawlerSessionManagementDefinition.ATTRIBUTES)
+                .withCardinality(XMLCardinality.Single.OPTIONAL)
+                .build());
+        return builder.withContent(contentBuilder.build()).build();
+    }
+
+    private ResourceRegistrationXMLElement websockets() {
+        SingletonResourceRegistrationXMLElement.Builder builder = this.factory.singletonElement(WebsocketsDefinition.REGISTRATION)
+                .addAttributes(List.of(WebsocketsDefinition.BUFFER_POOL, WebsocketsDefinition.WORKER, WebsocketsDefinition.DISPATCH_TO_WORKER))
+                .withCardinality(XMLCardinality.Single.OPTIONAL);
+
+        if (this.since(VERSION_4_0)) {
+            builder.addAttributes(List.of(WebsocketsDefinition.PER_MESSAGE_DEFLATE, WebsocketsDefinition.DEFLATER_LEVEL));
+        }
         return builder.build();
     }
 
-    private PersistentResourceXMLDescription ajpListener() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(AjpListenerResourceDefinition.PATH_ELEMENT);
-        Stream<AttributeDefinition> attributes = AjpListenerResourceDefinition.ATTRIBUTES.stream();
-        if (!this.since(VERSION_15_0) && !this.since(VERSION_14_0_COMMUNITY)) {
-            attributes = attributes.filter(Predicate.isEqual(AjpListenerResourceDefinition.ALLOWED_REQUEST_ATTRIBUTES_PATTERN).negate());
+    private ResourceRegistrationXMLElement reverseProxy() {
+        NamedResourceRegistrationXMLElement.Builder builder = this.factory.namedElement(ReverseProxyHandlerDefinition.REGISTRATION)
+                .addAttributes(List.of(
+                        ReverseProxyHandlerDefinition.CONNECTIONS_PER_THREAD,
+                        ReverseProxyHandlerDefinition.SESSION_COOKIE_NAMES,
+                        ReverseProxyHandlerDefinition.PROBLEM_SERVER_RETRY,
+                        ReverseProxyHandlerDefinition.REQUEST_QUEUE_SIZE,
+                        ReverseProxyHandlerDefinition.MAX_REQUEST_TIME,
+                        ReverseProxyHandlerDefinition.CACHED_CONNECTIONS_PER_THREAD,
+                        ReverseProxyHandlerDefinition.CONNECTION_IDLE_TIMEOUT))
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL);
+
+        if (this.since(VERSION_4_0)) {
+            builder.addAttribute(ReverseProxyHandlerDefinition.MAX_RETRIES);
         }
-        Stream.concat(this.listenerAttributes(), attributes).forEach(builder::addAttribute);
+        if (this.since(VERSION_14_0_COMMUNITY) || this.since(VERSION_15_0)) {
+            builder.addAttributes(List.of(ReverseProxyHandlerDefinition.REUSE_X_FORWARDED_HEADER, ReverseProxyHandlerDefinition.REWRITE_HOST_HEADER));
+        }
+        ResourceXMLSequence content = this.factory.sequence()
+                .addElement(this.reverseProxyHost())
+                .build();
+        return builder.withContent(content).build();
+    }
+
+    private ResourceRegistrationXMLElement reverseProxyHost() {
+        NamedResourceRegistrationXMLElement.Builder builder = this.factory.namedElement(ReverseProxyHandlerHostDefinition.REGISTRATION)
+                .addAttributes(List.of(ReverseProxyHandlerHostDefinition.OUTBOUND_SOCKET_BINDING, ReverseProxyHandlerHostDefinition.SCHEME, ReverseProxyHandlerHostDefinition.INSTANCE_ID, ReverseProxyHandlerHostDefinition.PATH, ReverseProxyHandlerHostDefinition.SECURITY_REALM))
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL);
+
+        if (this.since(VERSION_4_0)) {
+            builder.addAttributes(List.of(ReverseProxyHandlerHostDefinition.SSL_CONTEXT, ReverseProxyHandlerHostDefinition.ENABLE_HTTP2));
+        }
         return builder.build();
     }
 
-    private PersistentResourceXMLDescription httpListener() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(HttpListenerResourceDefinition.PATH_ELEMENT);
-        Stream<AttributeDefinition> attributes = HttpListenerResourceDefinition.ATTRIBUTES.stream();
-        // Reproduce attribute order of the previous parser implementation
-        Stream.of(this.listenerAttributes(), attributes, this.httpListenerAttributes()).flatMap(Function.identity()).forEach(builder::addAttribute);
+    private ResourceRegistrationXMLElement modCluster() {
+        NamedResourceRegistrationXMLElement.Builder builder = this.factory.namedElement(ModClusterDefinition.REGISTRATION)
+                .addAttributes(List.of(
+                        ModClusterDefinition.MANAGEMENT_SOCKET_BINDING,
+                        ModClusterDefinition.ADVERTISE_SOCKET_BINDING,
+                        ModClusterDefinition.SECURITY_KEY,
+                        ModClusterDefinition.ADVERTISE_PROTOCOL,
+                        ModClusterDefinition.ADVERTISE_PATH,
+                        ModClusterDefinition.ADVERTISE_FREQUENCY,
+                        ModClusterDefinition.HEALTH_CHECK_INTERVAL,
+                        ModClusterDefinition.BROKEN_NODE_TIMEOUT,
+                        ModClusterDefinition.WORKER,
+                        ModClusterDefinition.MAX_REQUEST_TIME,
+                        ModClusterDefinition.MANAGEMENT_ACCESS_PREDICATE,
+                        ModClusterDefinition.CONNECTIONS_PER_THREAD,
+                        ModClusterDefinition.CACHED_CONNECTIONS_PER_THREAD,
+                        ModClusterDefinition.CONNECTION_IDLE_TIMEOUT,
+                        ModClusterDefinition.REQUEST_QUEUE_SIZE,
+                        ModClusterDefinition.SECURITY_REALM,
+                        ModClusterDefinition.USE_ALIAS,
+                        ModClusterDefinition.ENABLE_HTTP2,
+                        ModClusterDefinition.MAX_AJP_PACKET_SIZE,
+                        ModClusterDefinition.HTTP2_MAX_HEADER_LIST_SIZE,
+                        ModClusterDefinition.HTTP2_MAX_FRAME_SIZE,
+                        ModClusterDefinition.HTTP2_MAX_CONCURRENT_STREAMS,
+                        ModClusterDefinition.HTTP2_INITIAL_WINDOW_SIZE,
+                        ModClusterDefinition.HTTP2_HEADER_TABLE_SIZE,
+                        ModClusterDefinition.HTTP2_ENABLE_PUSH))
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL);
+        if (this.since(VERSION_4_0)) {
+            builder.addAttributes(List.of(ModClusterDefinition.FAILOVER_STRATEGY, ModClusterDefinition.SSL_CONTEXT, ModClusterDefinition.MAX_RETRIES));
+        }
+        if (this.since(VERSION_10_0)) {
+            builder.withContent(this.factory.choice()
+                    .addElement(this.factory.singletonElement(NoAffinityResourceDefinition.REGISTRATION).withElementLocalName("no-affinity").build())
+                    .addElement(this.factory.singletonElement(SingleAffinityResourceDefinition.REGISTRATION).withElementLocalName(ResourceXMLElementLocalName.VALUE_KEY).build())
+                    .addElement(this.factory.singletonElement(RankedAffinityResourceDefinition.REGISTRATION).withElementLocalName(ResourceXMLElementLocalName.VALUE_KEY).addAttribute(RankedAffinityResourceDefinition.Attribute.DELIMITER.getDefinition()).build())
+                    .build());
+        }
         return builder.build();
     }
 
-    private PersistentResourceXMLDescription httpsListener() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(HttpsListenerResourceDefinition.PATH_ELEMENT);
-        Stream<AttributeDefinition> attributes = HttpsListenerResourceDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            attributes = attributes.filter(Predicate.isEqual(HttpsListenerResourceDefinition.SSL_CONTEXT).negate());
-        }
-        Stream<AttributeDefinition> httpListenerAttributes = this.httpListenerAttributes();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            httpListenerAttributes = httpListenerAttributes.filter(Predicate.not(Set.of(AbstractHttpListenerResourceDefinition.CERTIFICATE_FORWARDING, AbstractHttpListenerResourceDefinition.PROXY_ADDRESS_FORWARDING)::contains));
-        }
-        // Reproduce attribute order of the previous parser implementation
-        Stream.of(this.listenerAttributes(), attributes, httpListenerAttributes).flatMap(Function.identity()).forEach(builder::addAttribute);
-        return builder.build();
-    }
+    private ResourceRegistrationXMLElement applicationSecurityDomain() {
+        NamedResourceRegistrationXMLElement.Builder builder = this.factory.namedElement(ApplicationSecurityDomainDefinition.REGISTRATION)
+                .addAttributes(List.of(ApplicationSecurityDomainDefinition.HTTP_AUTHENTICATION_FACTORY, ApplicationSecurityDomainDefinition.OVERRIDE_DEPLOYMENT_CONFIG, ApplicationSecurityDomainDefinition.ENABLE_JACC))
+                .withCardinality(XMLCardinality.Unbounded.OPTIONAL)
+                ;
 
-    private Stream<AttributeDefinition> httpListenerAttributes() {
-        Stream<AttributeDefinition> attributes = AbstractHttpListenerResourceDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            attributes = attributes.filter(Predicate.isEqual(AbstractHttpListenerResourceDefinition.REQUIRE_HOST_HTTP11).negate());
+        if (this.since(VERSION_7_0)) {
+            builder.addAttribute(ApplicationSecurityDomainDefinition.SECURITY_DOMAIN);
         }
-        if (!this.since(UndertowSubsystemSchema.VERSION_6_0)) {
-            attributes = attributes.filter(Predicate.isEqual(AbstractHttpListenerResourceDefinition.PROXY_PROTOCOL).negate());
-        }
-        return attributes;
-    }
-
-    private Stream<AttributeDefinition> listenerAttributes() {
-        Stream<AttributeDefinition> attributes = ListenerResourceDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            attributes = attributes.filter(Predicate.isEqual(ListenerResourceDefinition.RFC6265_COOKIE_VALIDATION).negate());
-        }
-        if (!this.since(UndertowSubsystemSchema.VERSION_6_0)) {
-            attributes = attributes.filter(Predicate.isEqual(ListenerResourceDefinition.ALLOW_UNESCAPED_CHARACTERS_IN_URL).negate());
-        }
-        return attributes;
-    }
-
-    private PersistentResourceXMLDescription host() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(HostDefinition.PATH_ELEMENT);
-
-        builder.addChild(this.factory.builder(LocationDefinition.PATH_ELEMENT).addAttributes(LocationDefinition.ATTRIBUTES.stream())
-            .addChild(this.filterRef())
-            .build()
-        );
-        builder.addChild(this.factory.builder(AccessLogDefinition.PATH_ELEMENT).addAttributes(AccessLogDefinition.ATTRIBUTES.stream()).build());
-        if (this.since(UndertowSubsystemSchema.VERSION_9_0)) {
-            builder.addChild(this.factory.builder(ConsoleAccessLogDefinition.PATH_ELEMENT).addAttributes(ConsoleAccessLogDefinition.ATTRIBUTES.stream()).build());
-        }
-        builder.addChild(this.filterRef());
-        builder.addChild(this.factory.builder(SingleSignOnDefinition.PATH_ELEMENT).addAttributes(EnumSet.allOf(SingleSignOnDefinition.Attribute.class).stream().map(Supplier::get)).build());
-        if (this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            builder.addChild(this.factory.builder(HttpInvokerDefinition.PATH_ELEMENT).addAttributes(HttpInvokerDefinition.ATTRIBUTES.stream()).build());
+        if (this.since(VERSION_8_0)) {
+            builder.addAttributes(List.of(ApplicationSecurityDomainDefinition.ENABLE_JASPI, ApplicationSecurityDomainDefinition.INTEGRATED_JASPI));
         }
 
-        Stream<AttributeDefinition> attributes = HostDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_6_0)) {
-            attributes = attributes.filter(Predicate.isEqual(HostDefinition.QUEUE_REQUESTS_ON_START).negate());
-        }
-        attributes.forEach(builder::addAttribute);
-        return builder.build();
-    }
-
-    private PersistentResourceXMLDescription filterRef() {
-        return this.factory.builder(FilterRefDefinition.PATH_ELEMENT).addAttributes(FilterRefDefinition.ATTRIBUTES.stream()).build();
-    }
-
-    private PersistentResourceXMLDescription servletContainer() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(ServletContainerDefinition.PATH_ELEMENT);
-
-        builder.addChild(this.factory.builder(JspDefinition.PATH_ELEMENT).addAttributes(JspDefinition.ATTRIBUTES.stream()).setXmlElementName(Constants.JSP_CONFIG).build());
-        if (this.since(UndertowSubsystemSchema.VERSION_14_0)) {
-            builder.addChild(this.factory.builder(AffinityCookieDefinition.PATH_ELEMENT).addAttributes(AffinityCookieDefinition.ATTRIBUTES.stream()).build());
-        }
-        builder.addChild(this.factory.builder(SessionCookieDefinition.PATH_ELEMENT).addAttributes(SessionCookieDefinition.ATTRIBUTES.stream()).build());
-        builder.addChild(this.factory.builder(PersistentSessionsDefinition.PATH_ELEMENT).addAttributes(PersistentSessionsDefinition.ATTRIBUTES.stream()).build());
-        builder.addChild(this.websockets());
-        builder.addChild(PersistentResourceXMLDescription.builder(MimeMappingDefinition.PATH_ELEMENT).addAttributes(MimeMappingDefinition.ATTRIBUTES.stream()).setXmlWrapperElement("mime-mappings").build());
-        builder.addChild(PersistentResourceXMLDescription.builder(WelcomeFileDefinition.PATH_ELEMENT).setXmlWrapperElement("welcome-files").build());
-        builder.addChild(this.factory.builder(CrawlerSessionManagementDefinition.PATH_ELEMENT).addAttributes(CrawlerSessionManagementDefinition.ATTRIBUTES.stream()).build());
-
-        Stream<AttributeDefinition> attributes = ServletContainerDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            attributes = attributes.filter(Predicate.not(Set.of(ServletContainerDefinition.DISABLE_FILE_WATCH_SERVICE, ServletContainerDefinition.DISABLE_SESSION_ID_REUSE)::contains));
-        }
-        if (!this.since(UndertowSubsystemSchema.VERSION_5_0)) {
-            attributes = attributes.filter(Predicate.not(Set.of(ServletContainerDefinition.FILE_CACHE_MAX_FILE_SIZE, ServletContainerDefinition.FILE_CACHE_METADATA_SIZE, ServletContainerDefinition.FILE_CACHE_TIME_TO_LIVE)::contains));
-        }
-        if (!this.since(UndertowSubsystemSchema.VERSION_6_0)) {
-            attributes = attributes.filter(Predicate.isEqual(ServletContainerDefinition.DEFAULT_COOKIE_VERSION).negate());
-        }
-        if (!this.since(UndertowSubsystemSchema.VERSION_10_0)) {
-            attributes = attributes.filter(Predicate.isEqual(ServletContainerDefinition.PRESERVE_PATH_ON_FORWARD).negate());
-        }
-        attributes.forEach(builder::addAttribute);
-        return builder.build();
-    }
-
-    private PersistentResourceXMLDescription websockets() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(WebsocketsDefinition.PATH_ELEMENT);
-        Stream<AttributeDefinition> attributes = WebsocketsDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            attributes = attributes.filter(Predicate.not(Set.of(WebsocketsDefinition.PER_MESSAGE_DEFLATE, WebsocketsDefinition.DEFLATER_LEVEL)::contains));
-        }
-        attributes.forEach(builder::addAttribute);
-        return builder.build();
-    }
-
-    private PersistentResourceXMLDescription handlers() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(HandlerDefinitions.PATH_ELEMENT).setXmlElementName(Constants.HANDLERS).setNoAddOperation(true);
-
-        builder.addChild(this.factory.builder(FileHandlerDefinition.PATH_ELEMENT).addAttributes(FileHandlerDefinition.ATTRIBUTES.stream()).build());
-
-        Stream<AttributeDefinition> reverseProxyHandlerAttributes = ReverseProxyHandlerDefinition.ATTRIBUTES.stream();
-        if (!this.since(VERSION_15_0) && !this.since(VERSION_14_0_COMMUNITY)) {
-            reverseProxyHandlerAttributes = reverseProxyHandlerAttributes.filter(Predicate.not(Set.of(ReverseProxyHandlerDefinition.REUSE_X_FORWARDED_HEADER, ReverseProxyHandlerDefinition.REWRITE_HOST_HEADER)::contains));
-        }
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            reverseProxyHandlerAttributes = reverseProxyHandlerAttributes.filter(Predicate.isEqual(ReverseProxyHandlerDefinition.MAX_RETRIES).negate());
-        }
-        Stream<AttributeDefinition> reverseProxyHandlerHostAttributes = ReverseProxyHandlerHostDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            reverseProxyHandlerHostAttributes = reverseProxyHandlerHostAttributes.filter(Predicate.not(Set.of(ReverseProxyHandlerHostDefinition.SSL_CONTEXT, ReverseProxyHandlerHostDefinition.ENABLE_HTTP2)::contains));
-        }
-        builder.addChild(this.factory.builder(ReverseProxyHandlerDefinition.PATH_ELEMENT).addAttributes(reverseProxyHandlerAttributes)
-            .addChild(this.factory.builder(ReverseProxyHandlerHostDefinition.PATH_ELEMENT).addAttributes(ReverseProxyHandlerHostDefinition.ATTRIBUTES.stream()).setXmlElementName(Constants.HOST).build())
-            .build()
-        );
-        return builder.build();
-    }
-
-    private PersistentResourceXMLDescription modCluster() {
-        PersistentResourceXMLDescription.Builder builder = this.factory.builder(ModClusterDefinition.PATH_ELEMENT);
-
-        if (this.since(UndertowSubsystemSchema.VERSION_10_0)) {
-            builder.addChild(this.factory.builder(NoAffinityResourceDefinition.PATH).setXmlElementName(Constants.NO_AFFINITY).build());
-            builder.addChild(this.factory.builder(SingleAffinityResourceDefinition.PATH).setXmlElementName(Constants.SINGLE_AFFINITY).build());
-            builder.addChild(this.factory.builder(RankedAffinityResourceDefinition.PATH).addAttributes(Attribute.stream(RankedAffinityResourceDefinition.Attribute.class)).setXmlElementName(Constants.RANKED_AFFINITY).build());
-        }
-
-        Stream<AttributeDefinition> attributes = ModClusterDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_4_0)) {
-            attributes = attributes.filter(Predicate.not(Set.of(ModClusterDefinition.FAILOVER_STRATEGY, ModClusterDefinition.SSL_CONTEXT, ModClusterDefinition.MAX_RETRIES)::contains));
-        }
-        attributes.forEach(builder::addAttribute);
-        return builder.build();
-    }
-
-    private PersistentResourceXMLDescription applicationSecurityDomain() {
-        PersistentResourceXMLDescription.Builder builder = PersistentResourceXMLDescription.builder(ApplicationSecurityDomainDefinition.PATH_ELEMENT).setXmlWrapperElement(Constants.APPLICATION_SECURITY_DOMAINS);
-
-        Stream<AttributeDefinition> ssoAttributes = Stream.concat(EnumSet.allOf(ApplicationSecurityDomainSingleSignOnDefinition.Attribute.class).stream(), EnumSet.allOf(SingleSignOnDefinition.Attribute.class).stream()).map(Supplier::get);
-        builder.addChild(this.factory.builder(SingleSignOnDefinition.PATH_ELEMENT).addAttributes(ssoAttributes).build());
-
-        Stream<AttributeDefinition> attributes = ApplicationSecurityDomainDefinition.ATTRIBUTES.stream();
-        if (!this.since(UndertowSubsystemSchema.VERSION_7_0)) {
-            attributes = attributes.filter(Predicate.isEqual(ApplicationSecurityDomainDefinition.SECURITY_DOMAIN).negate());
-        }
-        if (!this.since(UndertowSubsystemSchema.VERSION_8_0)) {
-            attributes = attributes.filter(Predicate.not(Set.of(ApplicationSecurityDomainDefinition.ENABLE_JASPI, ApplicationSecurityDomainDefinition.INTEGRATED_JASPI)::contains));
-        }
-        attributes.forEach(builder::addAttribute);
-        return builder.build();
+        ResourceXMLSequence content = this.factory.sequence()
+                .addElement(this.singleSignOn(EnumSet.allOf(ApplicationSecurityDomainSingleSignOnDefinition.Attribute.class), XMLContent.of(this.factory.sequence()
+                        .addElement(ApplicationSecurityDomainSingleSignOnDefinition.Attribute.CREDENTIAL.get())
+                        .build())))
+                .build();
+        return builder.withContent(content).build();
     }
 }
