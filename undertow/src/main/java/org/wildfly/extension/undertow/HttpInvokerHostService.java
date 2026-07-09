@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import io.undertow.security.handlers.AuthenticationCallHandler;
 import io.undertow.security.handlers.AuthenticationConstraintHandler;
 import io.undertow.server.HttpHandler;
+import io.undertow.server.handlers.Cookie;
 import io.undertow.server.handlers.PathHandler;
 import io.undertow.server.session.SecureRandomSessionIdGenerator;
 import io.undertow.server.session.SessionConfig;
@@ -106,7 +107,14 @@ final class HttpInvokerHostService implements Service {
                     sessionConfig.setSessionId(exchange, id);
                 } else if (ex.getStatusCode() == StatusCodes.UNAUTHORIZED) {
                     // add a session cookie in order to avoid sticky session issue after 401 Unauthorized response
-                    sessionConfig.setSessionId(exchange, generator.createSessionId());
+                    id = generator.createSessionId();
+                    sessionConfig.setSessionId(exchange, id);
+                    // If this created a response cookie, update it to use a restrictive path
+                    for (Cookie cookie : exchange.responseCookies()) {
+                        if (cookie.getValue().contains(id)) {
+                            cookie.setPath(exchange.getResolvedPath());
+                        }
+                    }
                 }
             });
             handler.handleRequest(exchange);
